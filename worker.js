@@ -21,8 +21,13 @@ export default {
           "🔧 Xizmat: " + data.service + "\n" +
           "📍 Manzil: " + data.address + "\n" +
           "📝 Izoh: " + (data.details || "Yo'q");
+        console.log("TOKEN CHECK:", {
+  exists: !!env.TELEGRAM_BOT_TOKEN,
+  length: env.TELEGRAM_BOT_TOKEN?.length,
+  hasColon: env.TELEGRAM_BOT_TOKEN?.includes(":")
+});
 
-        const telegram = await fetch(
+         const telegram = await fetch(
           `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
           {
             method: "POST",
