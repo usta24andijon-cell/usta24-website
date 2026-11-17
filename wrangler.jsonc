@@ -1,0 +1,15 @@
+
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "usta24-website",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-17",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
