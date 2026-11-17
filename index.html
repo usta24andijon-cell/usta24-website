@@ -1,37 +1,48 @@
+
 <!DOCTYPE html>
 <html lang="uz">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>USTA 24 ANDIJON</title>
+<title>USTA 24 ANDIJON — Ishonchli ustalar</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:#f5f7fa;color:#172033}
-header{background:#102b50;color:white;padding:24px 16px;text-align:center}
-header h1{font-size:30px;margin:5px}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
+header{background:#102b50;color:white;text-align:center;padding:24px 15px}
+header h1{margin:0;font-size:30px}
 header span{color:#ffb21c}
-header p{margin:8px}
-.hero{text-align:center;padding:45px 18px;background:#183d68;color:white}
-.hero h2{font-size:28px}
-.hero p{line-height:1.6}
-.btn{display:inline-block;background:#ffb21c;color:#14243a;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:bold;margin:8px}
-section{padding:30px 16px;max-width:850px;margin:auto}
-h2{text-align:center}
-.services{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}
-.service{background:white;padding:22px 10px;text-align:center;border-radius:12px;box-shadow:0 2px 10px #0001;font-weight:bold}
+header p{margin:8px 0 0}
+.hero{background:linear-gradient(135deg,#183d68,#102b50);color:white;text-align:center;padding:55px 18px}
+.hero h2{font-size:30px;margin:0 0 12px}
+.hero p{line-height:1.7}
+.btn{display:inline-block;background:#ffb21c;color:#14243a;padding:13px 20px;border-radius:8px;text-decoration:none;font-weight:bold;border:0;cursor:pointer;margin:6px}
+section{max-width:1000px;margin:auto;padding:35px 16px}
+h2{text-align:center;color:#102b50}
+.services,.masters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.service,.master{background:white;padding:22px 14px;text-align:center;border-radius:12px;box-shadow:0 2px 12px #0001}
+.service{font-weight:bold}
+.master h3{margin:10px 0 5px;color:#102b50}
+.avatar{font-size:42px}
+.master p{color:#596579;line-height:1.5}
+.order{background:white;padding:25px;border-radius:14px;box-shadow:0 2px 12px #0001}
+input,select,textarea{width:100%;padding:13px;margin:7px 0 14px;border:1px solid #ccd3df;border-radius:8px;font-size:16px}
+textarea{min-height:100px;resize:vertical}
+button{font-size:16px}
 .contact{text-align:center;background:#e8eef6;border-radius:12px;padding:25px}
-footer{text-align:center;background:#102b50;color:white;padding:20px}
+footer{text-align:center;background:#102b50;color:white;padding:22px}
+.note{font-size:13px;color:#687386;line-height:1.5}
 </style>
 </head>
 <body>
+
 <header>
 <h1><span>USTA 24</span> ANDIJON</h1>
 <p>Уй ва хизматлар — бир жойда!</p>
 </header>
 
 <div class="hero">
-<h2>Сизга уста керакми?</h2>
-<p>Ишончли усталар. Тезкор хизмат. Қулай буюртма.</p>
+<h2>Сизга ишончли уста керакми?</h2>
+<p>Тажрибали усталар. Тезкор хизмат. Қулай буюртма.</p>
 <a class="btn" href="tel:+998770690003">Қўнғироқ қилиш</a>
 <a class="btn" href="https://t.me/usta24_andijon">Telegram</a>
 </div>
@@ -51,18 +62,111 @@ footer{text-align:center;background:#102b50;color:white;padding:20px}
 </section>
 
 <section>
+<h2>Бизнинг усталар</h2>
+<div class="masters">
+<div class="master">
+<div class="avatar">👨‍🔧</div>
+<h3>Уста 1</h3>
+<p>Мебел йиғиш ва таъмирлаш</p>
+<a class="btn" href="tel:+998770690003">Боғланиш</a>
+</div>
+<div class="master">
+<div class="avatar">👨‍🔧</div>
+<h3>Уста 2</h3>
+<p>Электрик хизматлари</p>
+<a class="btn" href="tel:+998770690003">Боғланиш</a>
+</div>
+<div class="master">
+<div class="avatar">👨‍🔧</div>
+<h3>Уста 3</h3>
+<p>Сантехник хизматлари</p>
+<a class="btn" href="tel:+998770690003">Боғланиш</a>
+</div>
+<div class="master">
+<div class="avatar">👨‍🔧</div>
+<h3>Уста 4</h3>
+<p>Юк ташиш ва пайвандлаш</p>
+<a class="btn" href="tel:+998770690003">Боғланиш</a>
+</div>
+</div>
+<p class="note">Усталарнинг ҳақиқий исми, сурати ва телефон рақамларини кейин киритамиз.</p>
+</section>
+
+<section>
+<h2>Онлайн буюртма бериш</h2>
+<div class="order">
+<form id="orderForm">
+<label>Исмингиз</label>
+<input name="name" type="text" placeholder="Исмингизни киритинг" required>
+
+<label>Телефон рақамингиз</label>
+<input name="phone" type="tel" placeholder="+998 __ ___ __ __" required>
+
+<label>Хизмат тури</label>
+<select name="service" required>
+<option value="">Хизматни танланг</option>
+<option>Мебел йиғиш</option>
+<option>Мебел таъмирлаш</option>
+<option>Электрик</option>
+<option>Сантехник</option>
+<option>Юк ташиш</option>
+<option>Уй кўчириш</option>
+<option>Пайвандчи</option>
+<option>Эшик-ром хизмати</option>
+</select>
+
+<label>Манзилингиз</label>
+<input name="address" type="text" placeholder="Масалан: Андижон шаҳри..." required>
+
+<label>Қўшимча маълумот</label>
+<textarea name="details" placeholder="Қандай иш кераклигини ёзинг"></textarea>
+
+<button class="btn" type="submit">Буюртма юбориш</button>
+<p id="formMessage" class="note" aria-live="polite"></p>
+</form>
+</div>
+</section>
+
+<section>
 <div class="contact">
-<h2>Буюртма бериш</h2>
-<p>Ҳозир биз билан боғланинг!</p>
+<h2>Биз билан боғланинг</h2>
 <p><strong>+998 77 069 00 03</strong></p>
-<a class="btn" href="https://wa.me/998770690003">WhatsApp орқали ёзиш</a>
-<a class="btn" href="https://t.me/usta24_andijon">Telegram орқали ёзиш</a>
+<a class="btn" href="tel:+998770690003">Қўнғироқ қилиш</a>
+<a class="btn" href="https://wa.me/998770690003">WhatsApp</a>
+<a class="btn" href="https://t.me/usta24_andijon">Telegram</a>
 </div>
 </section>
 
 <footer>
-<p>USTA 24 ANDIJON</p>
+<p><strong>USTA 24 ANDIJON</strong></p>
 <p>© 2026 Барча ҳуқуқлар ҳимояланган</p>
 </footer>
+
+<script>
+const form = document.getElementById("orderForm");
+form.addEventListener("submit", async function(event) {
+  event.preventDefault();
+  const message = document.getElementById("formMessage");
+  const data = Object.fromEntries(new FormData(form).entries());
+
+  message.textContent = "Буюртма юборилмоқда...";
+
+  try {
+    const response = await fetch("/api/order", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) throw new Error("Сервер хатоси");
+
+    message.textContent = "Буюртмангиз қабул қилинди!";
+    form.reset();
+  } catch (error) {
+    message.textContent = "Ҳозирча сервер уланмаган. Кейинги қадамда Telegram ва серверни созлаймиз.";
+  }
+});
+</script>
+
 </body>
 </html>
