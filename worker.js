@@ -35,11 +35,15 @@ export default {
         );
 
         if (!telegram.ok) {
-          return Response.json(
-            { error: "Telegramga yuborishda xatolik" },
-            { status: 502 }
-          );
-        }
+  const telegramError = await telegram.text();
+
+  console.error("Telegram API xatosi:", telegram.status, telegramError);
+
+  return Response.json(
+    { error: "Telegram xatosi", telegramStatus: telegram.status },
+    { status: 502 }
+  );
+}
 
         return Response.json({ success: true });
       } catch (error) {
