@@ -687,7 +687,7 @@ export default {
           
 
           // MIJOZGA USTA BIRIKTIRILGANI HAQIDA XABAR
-          constlet workerTelegramSent = false;
+          let constlet workerTelegramSent = false;
 
 try {
   workerTelegramSent = await sendTelegram(
