@@ -684,13 +684,22 @@ export default {
             "📱 Usta telefoni: " + workerPhone + "\n" +
             "📌 Holat: Ustaga biriktirildi";
 
-          const workerTelegramSent = await sendTelegram(
-            env.USTA24_CHAT_ID,
-            workerMessage
-          );
+          
 
           // MIJOZGA USTA BIRIKTIRILGANI HAQIDA XABAR
-          const customerMessage =
+          constlet workerTelegramSent = false;
+
+try {
+  workerTelegramSent = await sendTelegram(
+    env.USTA24_CHAT_ID,
+    workerMessage
+  );
+} catch (error) {
+  console.error(
+    "ADMIN TELEGRAM XABAR XATOSI:",
+    error
+  );
+} customerMessage =
             "👨‍🔧 USTA 24 — SIZGA USTA BIRIKTIRILDI\n\n" +
             "🆔 Buyurtma: #" + id + "\n" +
             "🔧 Xizmat: " + order.service + "\n\n" +
