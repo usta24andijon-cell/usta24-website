@@ -34,15 +34,25 @@ export default {
       }
     };
 
-    // TELEGRAM XABAR YUBORISH
-    const sendTelegram = async (chatId, message) => {
-      if (!env.TELEGRAM_BOT_TOKEN) {
-        console.error("TELEGRAM_BOT_TOKEN SOZLANMAGAN");
-        return false;
+    // TELEFON RAQAMINI BIR XIL FORMATGA KELTIRISH
+    const normalizePhone = (value) => {
+      let digits = String(value || "").replace(/\D/g, "");
+
+      if (digits.startsWith("00")) {
+        digits = digits.slice(2);
       }
 
-      if (!chatId) {
-        console.error("TELEGRAM CHAT_ID SOZLANMAGAN");
+      if (digits.length === 9) {
+        digits = "998" + digits;
+      }
+
+      return digits;
+    };
+
+    // ESKI ADMIN TELEGRAM BOTI
+    const sendTelegram = async (chatId, message) => {
+      if (!env.TELEGRAM_BOT_TOKEN || !chatId) {
+        console.error("ADMIN TELEGRAM SOZLANMAGAN");
         return false;
       }
 
@@ -66,26 +76,211 @@ export default {
         const result = await response.json();
 
         if (!response.ok || result.ok !== true) {
-          console.error(
-            "TELEGRAM API XATOSI:",
-            response.status,
-            result.description || JSON.stringify(result)
-          );
+          console.error("ADMIN TELEGRAM XATOSI:", result.description);
           return false;
         }
 
-        console.log("TELEGRAM XABARI YUBORILDI");
         return true;
-
       } catch (error) {
-        console.error("TELEGRAM ULANISH XATOSI:", error);
+        console.error("ADMIN TELEGRAM ULANISH XATOSI:", error);
+        return false;
+      }
+    };
+
+    // YANGI MIJOZ TELEGRAM BOTI
+    const sendCustomerTelegram = async (chatId, message, extra = {}) => {
+      if (!env.CUSTOMER_BOT_TOKEN || !chatId) {
+        console.error("MIJOZ BOT TOKENI YOKI CHAT ID YO'Q");
+        return false;
+      }
+
+      try {
+        const response = await fetch(
+          "https://api.telegram.org/bot" +
+          env.CUSTOMER_BOT_TOKEN +
+          "/sendMessage",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message,
+              ...extra
+            })
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || result.ok !== true) {
+          console.error("MIJOZ TELEGRAM XATOSI:", result.description);
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        console.error("MIJOZ TELEGRAM ULANISH XATOSI:", error);
+        return false;
+      }
+    };
+
+    // MIJOZGA TELEGRAM ORQALI XABAR YUBORISH
+    const notifyCustomer = async (phone, message) => {
+      const normalized = normalizePhone(phone);
+
+      if (!normalized) {
+        return false;
+      }
+
+      try {
+        const customer = await env.DB.prepare(`
+          SELECT chat_id
+          FROM customer_telegram
+          WHERE phone = ?
+          LIMIT 1
+        `).bind(normalized).first();
+
+        if (!customer?.chat_id) {
+          console.log("MIJOZ TELEGRAMGA ULANMAGAN:", normalized);
+          return false;
+        }
+
+        return await sendCustomerTelegram(
+          customer.chat_id,
+          message
+        );
+      } catch (error) {
+        console.error("MIJOZNI TOPISHDA XATO:", error);
         return false;
       }
     };
 
     try {
 
-      // 1. MIJOZ BUYURTMASI
+      // 1. MIJOZ TELEGRAM BOTI WEBHOOK
+
+      if (
+        url.pathname === "/api/customer-telegram-webhook" &&
+        request.method === "POST"
+      ) {
+        const secret = request.headers.get(
+          "X-Telegram-Bot-Api-Secret-Token"
+        );
+
+        if (
+          !env.CUSTOMER_BOT_WEBHOOK_SECRET ||
+          secret !== env.CUSTOMER_BOT_WEBHOOK_SECRET
+        ) {
+          return jsonResponse({
+            success: false,
+            error: "Webhook ruxsati yo'q"
+          }, 403);
+        }
+
+        if (!env.DB) {
+          return jsonResponse({
+            success: false,
+            error: "D1 DB sozlanmagan"
+          }, 500);
+        }
+
+        const update = await readBody();
+        const msg = update?.message;
+
+        if (!msg?.chat?.id) {
+          return jsonResponse({ success: true });
+        }
+
+        const chatId = String(msg.chat.id);
+        const messageText = String(msg.text || "");
+
+        // MIJOZ START BOSGANDA
+        if (messageText.startsWith("/start")) {
+          await sendCustomerTelegram(
+            chatId,
+            "Assalomu alaykum!\n\n" +
+            "USTA 24 mijozlar botiga xush kelibsiz.\n\n" +
+            "Buyurtmangiz holati va sizga biriktirilgan usta haqida xabar olish uchun telefon raqamingizni tasdiqlang.\n\n" +
+            "Quyidagi tugmani bosing:",
+            {
+              reply_markup: {
+                keyboard: [[
+                  {
+                    text: "📱 Telefon raqamimni yuborish",
+                    request_contact: true
+                  }
+                ]],
+                resize_keyboard: true,
+                one_time_keyboard: true
+              }
+            }
+          );
+
+          return jsonResponse({ success: true });
+        }
+
+        // MIJOZ TELEFONINI YUBORGANDA
+        if (msg.contact) {
+          const contact = msg.contact;
+
+          // FAQAT MIJOZNING O'Z TELEFONI QABUL QILINADI
+          if (
+            !msg.from ||
+            !contact.user_id ||
+            Number(contact.user_id) !== Number(msg.from.id)
+          ) {
+            await sendCustomerTelegram(
+              chatId,
+              "Iltimos, faqat o'zingizning telefon raqamingizni tugma orqali yuboring."
+            );
+
+            return jsonResponse({ success: true });
+          }
+
+          const phone = normalizePhone(contact.phone_number);
+
+          if (!phone || phone.length < 10) {
+            await sendCustomerTelegram(
+              chatId,
+              "Telefon raqami noto'g'ri. Iltimos, qaytadan yuboring."
+            );
+
+            return jsonResponse({ success: true });
+          }
+
+          await env.DB.prepare(`
+            INSERT INTO customer_telegram
+              (phone, chat_id, customer_name)
+            VALUES (?, ?, ?)
+            ON CONFLICT(phone) DO UPDATE SET
+              chat_id = excluded.chat_id,
+              customer_name = excluded.customer_name
+          `).bind(
+            phone,
+            chatId,
+            String(msg.from.first_name || "")
+          ).run();
+
+          await sendCustomerTelegram(
+            chatId,
+            "✅ Telefon raqamingiz tasdiqlandi!\n\n" +
+            "Endi USTA 24 buyurtmalaringiz va sizga biriktirilgan usta haqidagi xabarlarni shu bot orqali olasiz.",
+            {
+              reply_markup: {
+                remove_keyboard: true
+              }
+            }
+          );
+
+          return jsonResponse({ success: true });
+        }
+
+        return jsonResponse({ success: true });
+      }
+
+      // 2. MIJOZ BUYURTMASI
 
       if (
         url.pathname === "/api/order" &&
@@ -134,7 +329,8 @@ export default {
 
         const orderId = saved.meta?.last_row_id || null;
 
-        const message =
+        // ADMIN TELEGRAM GURUHIGA XABAR
+        const adminMessage =
           "🆕 USTA 24 — YANGI BUYURTMA\n\n" +
           "🆔 Buyurtma: #" + (orderId || "") + "\n" +
           "👤 Ism: " + name + "\n" +
@@ -146,18 +342,32 @@ export default {
 
         const telegramSent = await sendTelegram(
           env.TELEGRAM_CHAT_ID,
-          message
+          adminMessage
+        );
+
+        // MIJOZGA BUYURTMA QABUL QILINGANI HAQIDA XABAR
+        const customerMessage =
+          "✅ USTA 24 — BUYURTMANGIZ QABUL QILINDI\n\n" +
+          "🆔 Buyurtma: #" + (orderId || "") + "\n" +
+          "🔧 Xizmat: " + service + "\n" +
+          "📌 Holat: Yangi\n\n" +
+          "Sizga usta biriktirilganda alohida xabar yuboramiz.";
+
+        const customerNotified = await notifyCustomer(
+          phone,
+          customerMessage
         );
 
         return jsonResponse({
           success: true,
           message: "Buyurtma saqlandi",
           orderId,
-          telegramSent
+          telegramSent,
+          customerNotified
         });
       }
 
-      // 2. SAYTDA FAOL USTALAR
+      // 3. SAYTDA FAOL USTALAR
 
       if (
         url.pathname === "/api/ustalar" &&
@@ -176,7 +386,7 @@ export default {
         });
       }
 
-      // 3. ADMIN RUXSATI
+      // 4. ADMIN RUXSATI
 
       if (url.pathname.startsWith("/api/admin/")) {
         if (!checkAdmin()) {
@@ -187,7 +397,7 @@ export default {
         }
       }
 
-      // 4. ADMIN STATISTIKASI
+      // 5. ADMIN STATISTIKASI
 
       if (
         url.pathname === "/api/admin/stats" &&
@@ -222,7 +432,7 @@ export default {
         });
       }
 
-      // 5. ADMIN BUYURTMALARI
+      // 6. ADMIN BUYURTMALARI
 
       if (
         url.pathname === "/api/admin/orders" &&
@@ -250,7 +460,7 @@ export default {
         });
       }
 
-      // 6. USTALAR RO'YXATI
+      // 7. USTALAR RO'YXATI
 
       if (
         url.pathname === "/api/admin/ustalar" &&
@@ -268,7 +478,7 @@ export default {
         });
       }
 
-      // 7. USTA QO'SHISH
+      // 8. USTA QO'SHISH
 
       if (
         url.pathname === "/api/admin/ustalar" &&
@@ -311,7 +521,7 @@ export default {
         });
       }
 
-      // 8. USTANI TAHRIRLASH VA O'CHIRISH
+      // 9. USTANI TAHRIRLASH VA O'CHIRISH
 
       if (
         url.pathname.startsWith("/api/admin/ustalar/") &&
@@ -386,7 +596,7 @@ export default {
         });
       }
 
-      // 9. BUYURTMAGA USTA BIRIKTIRISH
+      // 10. BUYURTMAGA USTA BIRIKTIRISH VA HOLATNI O'ZGARTIRISH
 
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
@@ -454,8 +664,7 @@ export default {
             WHERE id = ?
           `).bind(workerName, workerPhone, id).run();
 
-          // USTA24 TELEGRAMIGA XABAR
-
+          // ADMIN TELEGRAMIGA XABAR
           const workerMessage =
             "🔔 USTA 24 — YANGI BUYURTMA BIRIKTIRILDI\n\n" +
             "🆔 Buyurtma: #" + id + "\n" +
@@ -473,6 +682,21 @@ export default {
             workerMessage
           );
 
+          // MIJOZGA USTA BIRIKTIRILGANI HAQIDA XABAR
+          const customerMessage =
+            "👨‍🔧 USTA 24 — SIZGA USTA BIRIKTIRILDI\n\n" +
+            "🆔 Buyurtma: #" + id + "\n" +
+            "🔧 Xizmat: " + order.service + "\n\n" +
+            "👨‍🔧 Usta: " + workerName + "\n" +
+            "📞 Usta telefoni: " + workerPhone + "\n\n" +
+            "📌 Holat: Ustaga biriktirildi\n\n" +
+            "Usta bilan telefon orqali bog'lanishingiz mumkin. Rahmat!";
+
+          const customerNotified = await notifyCustomer(
+            order.phone,
+            customerMessage
+          );
+
           return jsonResponse({
             success: true,
             message: "Usta buyurtmaga biriktirildi",
@@ -480,7 +704,8 @@ export default {
             worker_name: workerName,
             worker_phone: workerPhone,
             status: "Ustaga biriktirildi",
-            workerTelegramSent
+            workerTelegramSent,
+            customerNotified
           });
         }
 
@@ -507,15 +732,33 @@ export default {
           WHERE id = ?
         `).bind(data.status, id).run();
 
+        // MIJOZGA HOLAT O'ZGARGANI HAQIDA XABAR
+        const statusMessage =
+          "📢 USTA 24 — BUYURTMANGIZ HOLATI YANGILANDI\n\n" +
+          "🆔 Buyurtma: #" + id + "\n" +
+          "🔧 Xizmat: " + order.service + "\n" +
+          "📌 Yangi holat: " + data.status +
+          (order.worker_name
+            ? "\n\n👨‍🔧 Usta: " + order.worker_name +
+              "\n📞 Usta telefoni: " + order.worker_phone
+            : "") +
+          "\n\nUSTA 24 xizmatidan foydalanganingiz uchun rahmat!";
+
+        const customerNotified = await notifyCustomer(
+          order.phone,
+          statusMessage
+        );
+
         return jsonResponse({
           success: true,
           message: "Buyurtma holati yangilandi",
           orderId: id,
-          status: data.status
+          status: data.status,
+          customerNotified
         });
       }
 
-      // 10. TOPILMAGAN API
+      // 11. TOPILMAGAN API
 
       if (url.pathname.startsWith("/api/")) {
         return jsonResponse({
@@ -524,7 +767,7 @@ export default {
         }, 404);
       }
 
-      // 11. SAYT FAYLLARI
+      // 12. SAYT FAYLLARI
 
       if (env.ASSETS) {
         return await env.ASSETS.fetch(request);
@@ -544,3 +787,4 @@ export default {
     }
   }
 };
+
