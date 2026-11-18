@@ -1,0 +1,311 @@
+
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>USTA 24 — Admin panel</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      color: #172033;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    header {
+      background: #10233f;
+      color: white;
+      padding: 22px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+    }
+
+    h1 { margin: 0 0 8px; }
+
+    .login, .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      box-shadow: 0 2px 10px #0000000d;
+    }
+
+    input, select, button {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 15px;
+    }
+
+    input { width: 100%; margin: 8px 0; }
+
+    button {
+      cursor: pointer;
+      background: #1769e0;
+      color: white;
+      border: none;
+    }
+
+    button:hover { opacity: .9; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px #0000000d;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 28px;
+      margin-top: 8px;
+    }
+
+    .order {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 10px #0000000d;
+    }
+
+    .order p { margin: 8px 0; }
+
+    .order select {
+      margin-top: 10px;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .hidden { display: none; }
+
+    .muted { color: #64748b; }
+
+    #message { margin-top: 10px; }
+
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <header>
+    <h1>🛠 USTA 24</h1>
+    <p>Administrator boshqaruv paneli</p>
+  </header>
+
+  <section class="login" id="login">
+    <h2>Admin panelga kirish</h2>
+    <input
+      type="password"
+      id="password"
+      placeholder="Admin parolini kiriting"
+    >
+    <button onclick="loginAdmin()">Kirish</button>
+    <p id="message"></p>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <button onclick="loadDashboard()">🔄 Yangilash</button>
+    <button onclick="logout()" style="background:#64748b">
+      Chiqish
+    </button>
+
+    <h2>📊 Statistika</h2>
+
+    <div class="stats">
+      <div class="stat">
+        Jami buyurtmalar
+        <strong id="total">0</strong>
+      </div>
+      <div class="stat">
+        Yangi
+        <strong id="newOrders">0</strong>
+      </div>
+      <div class="stat">
+        Bajarilmoqda
+        <strong id="progress">0</strong>
+      </div>
+      <div class="stat">
+        Tugallangan
+        <strong id="completed">0</strong>
+      </div>
+    </div>
+
+    <h2>📋 Buyurtmalar</h2>
+    <div id="orders">
+      Yuklanmoqda...
+    </div>
+  </section>
+
+</div>
+
+<script>
+  let adminPassword = "";
+
+  const statuses = [
+    "Yangi",
+    "Qabul qilindi",
+    "Ustaga biriktirildi",
+    "Bajarilmoqda",
+    "Tugallandi",
+    "Bekor qilindi"
+  ];
+
+  async function api(path, options = {}) {
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + adminPassword,
+        ...(options.headers || {})
+      }
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Xatolik yuz berdi");
+    }
+
+    return result;
+  }
+
+  async function loginAdmin() {
+    const password = document.getElementById("password").value.trim();
+    const message = document.getElementById("message");
+
+    if (!password) {
+      message.textContent = "Parolni kiriting.";
+      return;
+    }
+
+    adminPassword = password;
+
+    try {
+      await api("/api/admin/stats");
+
+      document.getElementById("login").classList.add("hidden");
+      document.getElementById("dashboard").classList.remove("hidden");
+
+      await loadDashboard();
+    } catch (error) {
+      adminPassword = "";
+      message.textContent = "Kirish amalga oshmadi: " + error.message;
+    }
+  }
+
+  async function loadDashboard() {
+    const ordersBox = document.getElementById("orders");
+    ordersBox.textContent = "Yuklanmoqda...";
+
+    try {
+      const stats = await api("/api/admin/stats");
+      const data = await api("/api/admin/orders");
+
+      document.getElementById("total").textContent =
+        stats.stats.total || 0;
+
+      document.getElementById("newOrders").textContent =
+        stats.stats.new_orders || 0;
+
+      document.getElementById("progress").textContent =
+        stats.stats.in_progress || 0;
+
+      document.getElementById("completed").textContent =
+        stats.stats.completed || 0;
+
+      ordersBox.replaceChildren();
+
+      if (!data.orders.length) {
+        ordersBox.textContent = "Hozircha buyurtmalar yo'q.";
+        return;
+      }
+
+      data.orders.forEach(order => {
+        const card = document.createElement("div");
+        card.className = "order";
+
+        const title = document.createElement("h3");
+        title.textContent = "Buyurtma #" + order.id;
+        card.appendChild(title);
+
+        const fields = [
+          ["Ism", order.name],
+          ["Telefon", order.phone],
+          ["Xizmat", order.service],
+          ["Manzil", order.address],
+          ["Izoh", order.details || "Yo'q"],
+          ["Sana", order.created_at]
+        ];
+
+        fields.forEach(([label, value]) => {
+          const p = document.createElement("p");
+          p.textContent = label + ": " + (value ?? "");
+          card.appendChild(p);
+        });
+
+        const statusLabel = document.createElement("p");
+        statusLabel.textContent = "Buyurtma holati: " + order.status;
+        card.appendChild(statusLabel);
+
+        const select = document.createElement("select");
+
+        statuses.forEach(status => {
+          const option = document.createElement("option");
+          option.value = status;
+          option.textContent = status;
+          option.selected = status === order.status;
+          select.appendChild(option);
+        });
+
+        select.addEventListener("change", async () => {
+          try {
+            await api("/api/admin/orders/" + order.id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: select.value })
+            });
+
+            await loadDashboard();
+          } catch (error) {
+            alert("Holatni o'zgartirib bo'lmadi: " + error.message);
+          }
+        });
+
+        card.appendChild(select);
+        ordersBox.appendChild(card);
+      });
+
+    } catch (error) {
+      ordersBox.textContent = "Xatolik: " + error.message;
+    }
+  }
+
+  function logout() {
+    adminPassword = "";
+    document.getElementById("password").value = "";
+    document.getElementById("dashboard").classList.add("hidden");
+    document.getElementById("login").classList.remove("hidden");
+  }
+</script>
+</body>
+</html>
