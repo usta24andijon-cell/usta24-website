@@ -1,38 +1,426 @@
 
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // JSON javob
+    const jsonResponse = (data, status = 200) => {
+      return new Response(JSON.stringify(data), {
+        status,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store"
+        }
+      });
+    };
+
+    // Admin parolini tekshirish
+    const checkAdmin = () => {
+      const auth = request.headers.get("Authorization") || "";
+      const password = auth.startsWith("Bearer ")
+        ? auth.slice(7)
+        : "";
+
+      return Boolean(
+        env.ADMIN_PASSWORD &&
+        password &&
+        password === env.ADMIN_PASSWORD
+      );
+    };
+
+    // JSON body o'qish
+    const readBody = async () => {
+      try {
+        return await request.json();
+      } catch {
+        return null;
+      }
+    };
+
+    // API xatolarini qayta ishlash
+    try {
+
       // =====================================
-      // 7. BUYURTMA HOLATI VA USTANI BIRIKTIRISH
+      // 1. MIJOZ BUYURTMASI YUBORISH
+      // =====================================
+
+      if (
+        url.pathname === "/api/order" &&
+        request.method === "POST"
+      ) {
+        if (!env.DB) {
+          return jsonResponse({
+            success: false,
+            error: "D1 DB sozlanmagan"
+          }, 500);
+        }
+
+        const data = await readBody();
+
+        if (!data) {
+          return jsonResponse({
+            success: false,
+            error: "Ma'lumot noto'g'ri"
+          }, 400);
+        }
+
+        const name = String(data.name || "").trim();
+        const phone = String(data.phone || "").trim();
+        const service = String(data.service || "").trim();
+        const address = String(data.address || "").trim();
+        const details = String(data.details || "").trim();
+
+        if (!name || !phone || !service || !address) {
+          return jsonResponse({
+            success: false,
+            error: "Ism, telefon, xizmat va manzil majburiy"
+          }, 400);
+        }
+
+        const saved = await env.DB.prepare(`
+          INSERT INTO orders
+            (name, phone, service, address, details, status, created_at)
+          VALUES (?, ?, ?, ?, ?, 'Yangi', datetime('now'))
+        `).bind(
+          name,
+          phone,
+          service,
+          address,
+          details
+        ).run();
+
+        const orderId = saved.meta?.last_row_id || null;
+
+        // Telegram xabari
+        let telegramSent = false;
+
+        if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+          try {
+            const message =
+              "🆕 USTA 24 — YANGI BUYURTMA\n\n" +
+              "🆔 Buyurtma: #" + (orderId || "") + "\n" +
+              "👤 Ism: " + name + "\n" +
+              "📞 Telefon: " + phone + "\n" +
+              "🔧 Xizmat: " + service + "\n" +
+              "📍 Manzil: " + address + "\n" +
+              "📝 Izoh: " + (details || "Yo'q") + "\n" +
+              "📌 Holat: Yangi";
+
+            const telegramResponse = await fetch(
+              "https://api.telegram.org/bot" +
+              env.TELEGRAM_BOT_TOKEN +
+              "/sendMessage",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  chat_id: env.TELEGRAM_CHAT_ID,
+                  text: message
+                })
+              }
+            );
+
+            const telegramResult = await telegramResponse.json();
+            telegramSent =
+              telegramResponse.ok && telegramResult.ok === true;
+
+          } catch (error) {
+            console.error("Telegram xatosi:", error);
+          }
+        }
+
+        return jsonResponse({
+          success: true,
+          message: "Buyurtma saqlandi",
+          orderId,
+          telegramSent
+        });
+      }
+
+      // =====================================
+      // 2. SAYTDA FAOL USTALARNI KO'RSATISH
+      // =====================================
+
+      if (
+        url.pathname === "/api/ustalar" &&
+        request.method === "GET"
+      ) {
+        const result = await env.DB.prepare(`
+          SELECT id, name, phone, specialty, status
+          FROM ustalar
+          WHERE status = 'Faol'
+          ORDER BY id DESC
+        `).all();
+
+        return jsonResponse({
+          success: true,
+          ustalar: result.results || []
+        });
+      }
+
+      // =====================================
+      // 3. ADMIN API UCHUN RUXSAT
+      // =====================================
+
+      if (url.pathname.startsWith("/api/admin/")) {
+        if (!checkAdmin()) {
+          return jsonResponse({
+            success: false,
+            error: "Ruxsat yo'q. Admin parolini tekshiring."
+          }, 401);
+        }
+      }
+
+      // =====================================
+      // 4. ADMIN STATISTIKASI
+      // =====================================
+
+      if (
+        url.pathname === "/api/admin/stats" &&
+        request.method === "GET"
+      ) {
+        const result = await env.DB.prepare(`
+          SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN status = 'Yangi' THEN 1 ELSE 0 END)
+              AS new_orders,
+            SUM(CASE
+              WHEN status IN (
+                'Qabul qilindi',
+                'Ustaga biriktirildi',
+                'Bajarilmoqda'
+              )
+              THEN 1 ELSE 0
+            END) AS in_progress,
+            SUM(CASE WHEN status = 'Tugallandi' THEN 1 ELSE 0 END)
+              AS completed
+          FROM orders
+        `).first();
+
+        return jsonResponse({
+          success: true,
+          stats: {
+            total: result?.total || 0,
+            new_orders: result?.new_orders || 0,
+            in_progress: result?.in_progress || 0,
+            completed: result?.completed || 0
+          }
+        });
+      }
+
+      // =====================================
+      // 5. ADMIN BUYURTMALAR RO'YXATI
+      // =====================================
+
+      if (
+        url.pathname === "/api/admin/orders" &&
+        request.method === "GET"
+      ) {
+        const result = await env.DB.prepare(`
+          SELECT
+            id,
+            name,
+            phone,
+            service,
+            address,
+            details,
+            status,
+            created_at,
+            worker_name,
+            worker_phone
+          FROM orders
+          ORDER BY id DESC
+        `).all();
+
+        return jsonResponse({
+          success: true,
+          orders: result.results || []
+        });
+      }
+
+      // =====================================
+      // 6. USTALAR RO'YXATI VA QO'SHISH
+      // =====================================
+
+      if (
+        url.pathname === "/api/admin/ustalar" &&
+        request.method === "GET"
+      ) {
+        const result = await env.DB.prepare(`
+          SELECT id, name, phone, specialty, status, created_at
+          FROM ustalar
+          ORDER BY id DESC
+        `).all();
+
+        return jsonResponse({
+          success: true,
+          ustalar: result.results || []
+        });
+      }
+
+      if (
+        url.pathname === "/api/admin/ustalar" &&
+        request.method === "POST"
+      ) {
+        const data = await readBody();
+
+        if (!data) {
+          return jsonResponse({
+            error: "Ma'lumot noto'g'ri"
+          }, 400);
+        }
+
+        const name = String(data.name || "").trim();
+        const phone = String(data.phone || "").trim();
+        const specialty = String(data.specialty || "").trim();
+        const status = String(data.status || "Faol");
+
+        if (!name || !phone) {
+          return jsonResponse({
+            error: "Usta ismi va telefoni kerak"
+          }, 400);
+        }
+
+        if (!["Faol", "Nofaol"].includes(status)) {
+          return jsonResponse({
+            error: "Usta holati noto'g'ri"
+          }, 400);
+        }
+
+        const result = await env.DB.prepare(`
+          INSERT INTO ustalar (name, phone, specialty, status)
+          VALUES (?, ?, ?, ?)
+        `).bind(name, phone, specialty, status).run();
+
+        return jsonResponse({
+          success: true,
+          message: "Usta qo'shildi",
+          id: result.meta?.last_row_id || null
+        });
+      }
+
+      // =====================================
+      // 7. USTANI TAHRIRLASH VA O'CHIRISH
+      // =====================================
+
+      if (
+        url.pathname.startsWith("/api/admin/ustalar/") &&
+        ["PATCH", "DELETE"].includes(request.method)
+      ) {
+        const id = Number(url.pathname.split("/").pop());
+
+        if (!Number.isInteger(id) || id < 1) {
+          return jsonResponse({
+            error: "Usta ID noto'g'ri"
+          }, 400);
+        }
+
+        const worker = await env.DB.prepare(`
+          SELECT id FROM ustalar WHERE id = ?
+        `).bind(id).first();
+
+        if (!worker) {
+          return jsonResponse({
+            error: "Usta topilmadi"
+          }, 404);
+        }
+
+        if (request.method === "DELETE") {
+          await env.DB.prepare(`
+            DELETE FROM ustalar WHERE id = ?
+          `).bind(id).run();
+
+          return jsonResponse({
+            success: true,
+            message: "Usta o'chirildi"
+          });
+        }
+
+        const data = await readBody();
+
+        if (!data) {
+          return jsonResponse({
+            error: "Ma'lumot noto'g'ri"
+          }, 400);
+        }
+
+        const name = String(data.name || "").trim();
+        const phone = String(data.phone || "").trim();
+        const specialty = String(data.specialty || "").trim();
+        const status = String(data.status || "Faol");
+
+        if (!name || !phone) {
+          return jsonResponse({
+            error: "Ism va telefon kerak"
+          }, 400);
+        }
+
+        if (!["Faol", "Nofaol"].includes(status)) {
+          return jsonResponse({
+            error: "Usta holati noto'g'ri"
+          }, 400);
+        }
+
+        await env.DB.prepare(`
+          UPDATE ustalar
+          SET name = ?,
+              phone = ?,
+              specialty = ?,
+              status = ?
+          WHERE id = ?
+        `).bind(name, phone, specialty, status, id).run();
+
+        return jsonResponse({
+          success: true,
+          message: "Usta yangilandi"
+        });
+      }
+
+      // =====================================
+      // 8. BUYURTMA HOLATI VA USTANI BIRIKTIRISH
       // =====================================
 
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
         request.method === "PATCH"
       ) {
-        if (!checkAdmin()) {
-          return jsonResponse({ error: "Ruxsat yo'q" }, 401);
-        }
-
         const id = Number(url.pathname.split("/").pop());
 
         if (!Number.isInteger(id) || id < 1) {
-          return jsonResponse({ error: "Buyurtma ID noto'g'ri" }, 400);
+          return jsonResponse({
+            error: "Buyurtma ID noto'g'ri"
+          }, 400);
         }
 
-        const data = await request.json();
+        const data = await readBody();
+
+        if (!data) {
+          return jsonResponse({
+            error: "Ma'lumot noto'g'ri"
+          }, 400);
+        }
 
         const order = await env.DB.prepare(`
           SELECT id FROM orders WHERE id = ?
         `).bind(id).first();
 
         if (!order) {
-          return jsonResponse({ error: "Buyurtma topilmadi" }, 404);
+          return jsonResponse({
+            error: "Buyurtma topilmadi"
+          }, 404);
         }
 
         // USTANI BIRIKTIRISH
-        if (data.worker_name !== undefined || data.worker_phone !== undefined) {
-          if (
-            !data.worker_name ||
-            !data.worker_phone
-          ) {
+        if (
+          data.worker_name !== undefined ||
+          data.worker_phone !== undefined
+        ) {
+          const workerName = String(data.worker_name || "").trim();
+          const workerPhone = String(data.worker_phone || "").trim();
+
+          if (!workerName || !workerPhone) {
             return jsonResponse({
               error: "Usta ismi va telefoni kerak"
             }, 400);
@@ -40,11 +428,10 @@
 
           const worker = await env.DB.prepare(`
             SELECT id FROM ustalar
-            WHERE name = ? AND phone = ? AND status = 'Faol'
-          `).bind(
-            String(data.worker_name).trim(),
-            String(data.worker_phone).trim()
-          ).first();
+            WHERE name = ?
+              AND phone = ?
+              AND status = 'Faol'
+          `).bind(workerName, workerPhone).first();
 
           if (!worker) {
             return jsonResponse({
@@ -58,18 +445,14 @@
                 worker_phone = ?,
                 status = 'Ustaga biriktirildi'
             WHERE id = ?
-          `).bind(
-            String(data.worker_name).trim(),
-            String(data.worker_phone).trim(),
-            id
-          ).run();
+          `).bind(workerName, workerPhone, id).run();
 
           return jsonResponse({
             success: true,
             message: "Usta buyurtmaga biriktirildi",
             orderId: id,
-            worker_name: data.worker_name,
-            worker_phone: data.worker_phone,
+            worker_name: workerName,
+            worker_phone: workerPhone,
             status: "Ustaga biriktirildi"
           });
         }
@@ -103,3 +486,37 @@
           status: data.status
         });
       }
+
+      // =====================================
+      // 9. TOPILMAGAN API
+      // =====================================
+
+      if (url.pathname.startsWith("/api/")) {
+        return jsonResponse({
+          success: false,
+          error: "API manzili topilmadi"
+        }, 404);
+      }
+
+      // =====================================
+      // 10. SAYT FAYLLARINI OCHISH
+      // =====================================
+
+      if (env.ASSETS) {
+        return await env.ASSETS.fetch(request);
+      }
+
+      return new Response("ASSETS binding topilmadi", {
+        status: 500
+      });
+
+    } catch (error) {
+      console.error("SERVER XATOSI:", error);
+
+      return jsonResponse({
+        success: false,
+        error: "Serverda xatolik yuz berdi"
+      }, 500);
+    }
+  }
+};
