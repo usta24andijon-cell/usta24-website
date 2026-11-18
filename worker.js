@@ -3,18 +3,19 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // CORS sozlamalari
+    // 1. CORS sozlamalari
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization"
     };
 
+    // OPTIONS so'rovi
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // JSON javob qaytarish
+    // JSON javob
     const jsonResponse = (data, status = 200) => {
       return Response.json(data, {
         status,
@@ -22,10 +23,11 @@ export default {
       });
     };
 
-    // ADMIN tekshiruvi
+    // Admin parolini tekshirish
     const checkAdmin = () => {
       const auth = request.headers.get("Authorization");
-      return (
+
+      return Boolean(
         env.ADMIN_PASSWORD &&
         auth === `Bearer ${env.ADMIN_PASSWORD}`
       );
@@ -33,7 +35,10 @@ export default {
 
     try {
 
-      // 1. YANGI BUYURTMA QABUL QILISH
+      // ==================================
+      // 2. YANGI BUYURTMA QABUL QILISH
+      // ==================================
+
       if (
         url.pathname === "/api/order" &&
         request.method === "POST"
@@ -52,7 +57,7 @@ export default {
           );
         }
 
-        // Buyurtmani D1 bazasiga saqlash
+        // D1 bazasiga buyurtma yozish
         const result = await env.DB.prepare(`
           INSERT INTO orders
           (name, phone, service, address, details, status)
@@ -79,7 +84,19 @@ export default {
           "📝 Izoh: " + (data.details || "Yo'q") + "\n" +
           "📌 Holati: Yangi";
 
-        // Telegramga yuborish
+        // Telegram sozlamalarini tekshirish
+        if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+          console.error("Telegram sozlamalari mavjud emas");
+
+          return jsonResponse({
+            success: true,
+            orderId,
+            saved: true,
+            telegramSent: false
+          }, 201);
+        }
+
+        // Telegram guruhiga yuborish
         const telegram = await fetch(
           `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
           {
@@ -94,11 +111,14 @@ export default {
           }
         );
 
-        if (!telegram.ok) {
-          const errorText = await telegram.text();
-          console.error("Telegram xatosi:", errorText);
+        const telegramResult = await telegram.json();
 
-          // Buyurtma bazada saqlangan, lekin Telegram xabarida xato bor.
+        if (!telegram.ok || !telegramResult.ok) {
+          console.error(
+            "Telegram xatosi:",
+            telegramResult
+          );
+
           return jsonResponse({
             success: true,
             orderId,
@@ -115,7 +135,10 @@ export default {
         }, 201);
       }
 
-      // 2. BARCHA BUYURTMALARNI KO'RISH
+      // ==================================
+      // 3. BARCHA BUYURTMALAR
+      // ==================================
+
       if (
         url.pathname === "/api/admin/orders" &&
         request.method === "GET"
@@ -138,7 +161,10 @@ export default {
         });
       }
 
-      // 3. BITTA BUYURTMANI KO'RISH
+      // ==================================
+      // 4. BITTA BUYURTMANI KO'RISH
+      // ==================================
+
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
         request.method === "GET"
@@ -178,7 +204,10 @@ export default {
         });
       }
 
-      // 4. BUYURTMA HOLATINI O'ZGARTIRISH
+      // ==================================
+      // 5. BUYURTMA HOLATINI O'ZGARTIRISH
+      // ==================================
+
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
         request.method === "PATCH"
@@ -240,7 +269,10 @@ export default {
         });
       }
 
-      // 5. BUYURTMALAR SONI
+      // ==================================
+      // 6. BUYURTMALAR STATISTIKASI
+      // ==================================
+
       if (
         url.pathname === "/api/admin/stats" &&
         request.method === "GET"
@@ -255,9 +287,18 @@ export default {
         const result = await env.DB.prepare(`
           SELECT
             COUNT(*) AS total,
-            SUM(CASE WHEN status = 'Yangi' THEN 1 ELSE 0 END) AS new_orders,
-            SUM(CASE WHEN status = 'Bajarilmoqda' THEN 1 ELSE 0 END) AS in_progress,
-            SUM(CASE WHEN status = 'Tugallandi' THEN 1 ELSE 0 END) AS completed
+            COALESCE(
+              SUM(CASE WHEN status = 'Yangi' THEN 1 ELSE 0 END),
+              0
+            ) AS new_orders,
+            COALESCE(
+              SUM(CASE WHEN status = 'Bajarilmoqda' THEN 1 ELSE 0 END),
+              0
+            ) AS in_progress,
+            COALESCE(
+              SUM(CASE WHEN status = 'Tugallandi' THEN 1 ELSE 0 END),
+              0
+            ) AS completed
           FROM orders
         `).first();
 
@@ -267,7 +308,10 @@ export default {
         });
       }
 
-      // 6. TOPILMAGAN API
+      // ==================================
+      // 7. TOPILMAGAN API
+      // ==================================
+
       if (url.pathname.startsWith("/api/")) {
         return jsonResponse(
           { error: "API manzili topilmadi" },
@@ -275,17 +319,20 @@ export default {
         );
       }
 
-      // Oddiy sayt fayllarini chiqarish
-      return env.ASSETS.fetch(request);
-} catch (error) {
-  console.error("SERVER ERROR DETAILS:", error?.message, error?.stack);
+      // ==================================
+      // 8. SAYT FAYLLARINI OCHISH
+      // ==================================
 
-  return jsonResponse(
-    { error: error?.message || "Server xatosi" },
-    500
-  );
-}
-    
+      return env.ASSETS.fetch(request);
+
+    } catch (error) {
+
+      // Xatolarni Cloudflare Logs ga yozish
+      console.error(
+        "SERVER ERROR DETAILS:",
+        error?.message,
+        error?.stack
+      );
 
       return jsonResponse(
         { error: "Server xatosi" },
@@ -294,3 +341,4 @@ export default {
     }
   }
 };
+
