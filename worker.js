@@ -169,13 +169,6 @@ export default {
           "X-Telegram-Bot-Api-Secret-Token"
         );
 
-      console.log("WEBHOOK SECRET CHECK:", {
-  envExists: Boolean(env.CUSTOMER_BOT_WEBHOOK_SECRET),
-  envLength: env.CUSTOMER_BOT_WEBHOOK_SECRET?.length || 0,
-  headerExists: Boolean(secret),
-  headerLength: secret?.length || 0,
-  matches: secret === env.CUSTOMER_BOT_WEBHOOK_SECRET
-});
         if (
           !env.CUSTOMER_BOT_WEBHOOK_SECRET ||
           secret !== env.CUSTOMER_BOT_WEBHOOK_SECRET
@@ -347,10 +340,16 @@ export default {
           "📝 Izoh: " + (details || "Yo'q") + "\n" +
           "📌 Holat: Yangi";
 
-        const telegramSent = await sendTelegram(
-          env.TELEGRAM_CHAT_ID,
-          adminMessage
-        );
+        let telegramSent = false;
+
+        try {
+          telegramSent = await sendTelegram(
+            env.TELEGRAM_CHAT_ID,
+            adminMessage
+          );
+        } catch (error) {
+          console.error("ADMIN GURUH XABAR XATOSI:", error);
+        }
 
         // MIJOZGA BUYURTMA QABUL QILINGANI HAQIDA XABAR
         const customerMessage =
@@ -684,22 +683,22 @@ export default {
             "📱 Usta telefoni: " + workerPhone + "\n" +
             "📌 Holat: Ustaga biriktirildi";
 
-          
+          let workerTelegramSent = false;
+
+          try {
+            workerTelegramSent = await sendTelegram(
+              env.USTA24_CHAT_ID,
+              workerMessage
+            );
+          } catch (error) {
+            console.error(
+              "ADMIN TELEGRAM XABAR XATOSI:",
+              error
+            );
+          }
 
           // MIJOZGA USTA BIRIKTIRILGANI HAQIDA XABAR
-          let constlet workerTelegramSent = false;
-
-try {
-  workerTelegramSent = await sendTelegram(
-    env.USTA24_CHAT_ID,
-    workerMessage
-  );
-} catch (error) {
-  console.error(
-    "ADMIN TELEGRAM XABAR XATOSI:",
-    error
-  );
-} customerMessage =
+          const customerMessage =
             "👨‍🔧 USTA 24 — SIZGA USTA BIRIKTIRILDI\n\n" +
             "🆔 Buyurtma: #" + id + "\n" +
             "🔧 Xizmat: " + order.service + "\n\n" +
@@ -803,4 +802,3 @@ try {
     }
   }
 };
-
