@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>USTA 24 — Admin panel</title>
+
   <style>
     * { box-sizing: border-box; }
 
@@ -46,16 +47,25 @@
       font-size: 15px;
     }
 
-    input { width: 100%; margin: 8px 0; }
+    input {
+      width: 100%;
+      margin: 8px 0;
+    }
 
     button {
       cursor: pointer;
       background: #1769e0;
       color: white;
       border: none;
+      margin: 4px 3px 4px 0;
     }
 
     button:hover { opacity: .9; }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
 
     .stats {
       display: grid;
@@ -77,7 +87,7 @@
       margin-top: 8px;
     }
 
-    .order {
+    .order, .worker {
       background: white;
       padding: 18px;
       border-radius: 12px;
@@ -85,22 +95,55 @@
       box-shadow: 0 2px 10px #0000000d;
     }
 
-    .order p { margin: 8px 0; }
+    .order p, .worker p { margin: 8px 0; }
 
-    .order select {
+    .order select, .worker select {
       margin-top: 10px;
       width: 100%;
       max-width: 300px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .form-grid input, .form-grid select {
+      width: 100%;
+      margin: 0;
     }
 
     .hidden { display: none; }
 
     .muted { color: #64748b; }
 
-    #message { margin-top: 10px; }
+    .danger { background: #dc2626; }
+    .secondary { background: #64748b; }
+    .success { background: #15803d; }
+
+    .message {
+      margin-top: 12px;
+      font-weight: bold;
+    }
+
+    .active {
+      color: #15803d;
+      font-weight: bold;
+    }
+
+    .inactive {
+      color: #dc2626;
+      font-weight: bold;
+    }
+
+    .section-title {
+      margin-top: 28px;
+    }
 
     @media (max-width: 600px) {
       body { padding: 12px; }
+      .form-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -113,54 +156,129 @@
     <p>Administrator boshqaruv paneli</p>
   </header>
 
+  <!-- ADMIN KIRISH -->
   <section class="login" id="login">
     <h2>Admin panelga kirish</h2>
+
     <input
       type="password"
       id="password"
       placeholder="Admin parolini kiriting"
     >
+
     <button onclick="loginAdmin()">Kirish</button>
-    <p id="message"></p>
+
+    <p id="message" class="message"></p>
   </section>
 
+  <!-- ASOSIY PANEL -->
   <section id="dashboard" class="hidden">
+
     <button onclick="loadDashboard()">🔄 Yangilash</button>
-    <button onclick="logout()" style="background:#64748b">
+
+    <button onclick="logout()" class="secondary">
       Chiqish
     </button>
 
-    <h2>📊 Statistika</h2>
+    <!-- STATISTIKA -->
+    <h2 class="section-title">📊 Buyurtmalar statistikasi</h2>
 
     <div class="stats">
       <div class="stat">
         Jami buyurtmalar
         <strong id="total">0</strong>
       </div>
+
       <div class="stat">
         Yangi
         <strong id="newOrders">0</strong>
       </div>
+
       <div class="stat">
         Bajarilmoqda
         <strong id="progress">0</strong>
       </div>
+
       <div class="stat">
         Tugallangan
         <strong id="completed">0</strong>
       </div>
     </div>
 
-    <h2>📋 Buyurtmalar</h2>
-    <div id="orders">
-      Yuklanmoqda...
+    <!-- USTA QO'SHISH -->
+    <div class="card">
+      <h2>➕ Yangi usta qo‘shish</h2>
+
+      <form id="workerForm">
+
+        <div class="form-grid">
+          <input
+            type="text"
+            id="workerName"
+            placeholder="Ustaning ismi"
+            required
+          >
+
+          <input
+            type="tel"
+            id="workerPhone"
+            placeholder="Telefon raqami"
+            required
+          >
+
+          <input
+            type="text"
+            id="workerSpecialty"
+            placeholder="Mutaxassisligi"
+          >
+
+          <select id="workerStatus">
+            <option value="Faol">Faol</option>
+            <option value="Nofaol">Nofaol</option>
+          </select>
+        </div>
+
+        <br>
+
+        <button type="submit" id="saveWorker">
+          Ustani qo‘shish
+        </button>
+
+        <button
+          type="button"
+          class="secondary hidden"
+          id="cancelEdit"
+          onclick="cancelWorkerEdit()"
+        >
+          Bekor qilish
+        </button>
+
+        <p id="workerMessage" class="message"></p>
+
+      </form>
     </div>
+
+    <!-- USTALAR RO'YXATI -->
+    <h2>👷 Ustalar ro‘yxati</h2>
+
+    <div id="workers">
+      Ustalar yuklanmoqda...
+    </div>
+
+    <!-- BUYURTMALAR -->
+    <h2 class="section-title">📋 Buyurtmalar</h2>
+
+    <div id="orders">
+      Buyurtmalar yuklanmoqda...
+    </div>
+
   </section>
 
 </div>
 
 <script>
   let adminPassword = "";
+  let editingWorkerId = null;
 
   const statuses = [
     "Yangi",
@@ -170,6 +288,10 @@
     "Tugallandi",
     "Bekor qilindi"
   ];
+
+  // =====================================
+  // API BILAN ISHLASH
+  // =====================================
 
   async function api(path, options = {}) {
     const response = await fetch(path, {
@@ -181,7 +303,13 @@
       }
     });
 
-    const result = await response.json();
+    let result;
+
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("Serverdan noto'g'ri javob keldi");
+    }
 
     if (!response.ok) {
       throw new Error(result.error || "Xatolik yuz berdi");
@@ -190,9 +318,16 @@
     return result;
   }
 
+  // =====================================
+  // ADMIN KIRISH
+  // =====================================
+
   async function loginAdmin() {
-    const password = document.getElementById("password").value.trim();
-    const message = document.getElementById("message");
+    const password =
+      document.getElementById("password").value.trim();
+
+    const message =
+      document.getElementById("message");
 
     if (!password) {
       message.textContent = "Parolni kiriting.";
@@ -208,104 +343,384 @@
       document.getElementById("dashboard").classList.remove("hidden");
 
       await loadDashboard();
+
     } catch (error) {
       adminPassword = "";
-      message.textContent = "Kirish amalga oshmadi: " + error.message;
+      message.textContent =
+        "Kirish amalga oshmadi: " + error.message;
     }
   }
 
+  // =====================================
+  // BARCHA MA'LUMOTLARNI YUKLASH
+  // =====================================
+
   async function loadDashboard() {
-    const ordersBox = document.getElementById("orders");
-    ordersBox.textContent = "Yuklanmoqda...";
-
     try {
-      const stats = await api("/api/admin/stats");
-      const data = await api("/api/admin/orders");
+      await loadStats();
+      await loadOrders();
+      await loadWorkers();
+    } catch (error) {
+      alert("Ma'lumotlarni yuklashda xatolik: " + error.message);
+    }
+  }
 
-      document.getElementById("total").textContent =
-        stats.stats.total || 0;
+  // =====================================
+  // STATISTIKA
+  // =====================================
 
-      document.getElementById("newOrders").textContent =
-        stats.stats.new_orders || 0;
+  async function loadStats() {
+    const result = await api("/api/admin/stats");
+    const stats = result.stats;
 
-      document.getElementById("progress").textContent =
-        stats.stats.in_progress || 0;
+    document.getElementById("total").textContent =
+      stats.total || 0;
 
-      document.getElementById("completed").textContent =
-        stats.stats.completed || 0;
+    document.getElementById("newOrders").textContent =
+      stats.new_orders || 0;
 
-      ordersBox.replaceChildren();
+    document.getElementById("progress").textContent =
+      stats.in_progress || 0;
 
-      if (!data.orders.length) {
-        ordersBox.textContent = "Hozircha buyurtmalar yo'q.";
+    document.getElementById("completed").textContent =
+      stats.completed || 0;
+  }
+
+  // =====================================
+  // BUYURTMALAR RO'YXATI
+  // =====================================
+
+  async function loadOrders() {
+    const box = document.getElementById("orders");
+
+    box.textContent = "Yuklanmoqda...";
+
+    const data = await api("/api/admin/orders");
+
+    box.replaceChildren();
+
+    if (!data.orders.length) {
+      box.textContent = "Hozircha buyurtmalar yo'q.";
+      return;
+    }
+
+    data.orders.forEach(order => {
+      const card = document.createElement("div");
+      card.className = "order";
+
+      const title = document.createElement("h3");
+      title.textContent = "Buyurtma #" + order.id;
+      card.appendChild(title);
+
+      const fields = [
+        ["Ism", order.name],
+        ["Telefon", order.phone],
+        ["Xizmat", order.service],
+        ["Manzil", order.address],
+        ["Izoh", order.details || "Yo'q"],
+        ["Sana", order.created_at || ""]
+      ];
+
+      fields.forEach(([label, value]) => {
+        const p = document.createElement("p");
+        p.textContent = label + ": " + (value ?? "");
+        card.appendChild(p);
+      });
+
+      const label = document.createElement("p");
+      label.textContent = "Buyurtma holati:";
+      card.appendChild(label);
+
+      const select = document.createElement("select");
+
+      statuses.forEach(status => {
+        const option = document.createElement("option");
+        option.value = status;
+        option.textContent = status;
+        option.selected = status === order.status;
+        select.appendChild(option);
+      });
+
+      select.addEventListener("change", async () => {
+        select.disabled = true;
+
+        try {
+          await api("/api/admin/orders/" + order.id, {
+            method: "PATCH",
+            body: JSON.stringify({
+              status: select.value
+            })
+          });
+
+          await loadStats();
+
+        } catch (error) {
+          alert("Holatni o'zgartirib bo'lmadi: " + error.message);
+          select.value = order.status;
+        } finally {
+          select.disabled = false;
+        }
+      });
+
+      card.appendChild(select);
+      box.appendChild(card);
+    });
+  }
+
+  // =====================================
+  // USTALAR RO'YXATINI YUKLASH
+  // =====================================
+
+  async function loadWorkers() {
+    const box = document.getElementById("workers");
+
+    box.textContent = "Ustalar yuklanmoqda...";
+
+    const data = await api("/api/admin/ustalar");
+
+    box.replaceChildren();
+
+    if (!data.ustalar.length) {
+      box.textContent = "Hozircha ustalar mavjud emas.";
+      return;
+    }
+
+    data.ustalar.forEach(worker => {
+      const card = document.createElement("div");
+      card.className = "worker";
+
+      const title = document.createElement("h3");
+      title.textContent = "👷 " + worker.name;
+      card.appendChild(title);
+
+      const fields = [
+        ["ID", worker.id],
+        ["Telefon", worker.phone],
+        ["Mutaxassislik", worker.specialty || "Ko'rsatilmagan"]
+      ];
+
+      fields.forEach(([label, value]) => {
+        const p = document.createElement("p");
+        p.textContent = label + ": " + (value ?? "");
+        card.appendChild(p);
+      });
+
+      const status = document.createElement("p");
+      status.textContent = "Holati: " + worker.status;
+      status.className =
+        worker.status === "Faol" ? "active" : "inactive";
+
+      card.appendChild(status);
+
+      const editButton = document.createElement("button");
+      editButton.textContent = "✏️ Tahrirlash";
+
+      editButton.addEventListener("click", () => {
+        editWorker(worker);
+      });
+
+      card.appendChild(editButton);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "🗑 O'chirish";
+      deleteButton.className = "danger";
+
+      deleteButton.addEventListener("click", () => {
+        deleteWorker(worker.id, worker.name);
+      });
+
+      card.appendChild(deleteButton);
+
+      box.appendChild(card);
+    });
+  }
+
+  // =====================================
+  // USTA QO'SHISH VA TAHRIRLASH
+  // =====================================
+
+  document.getElementById("workerForm")
+    .addEventListener("submit", async function(event) {
+
+      event.preventDefault();
+
+      const name =
+        document.getElementById("workerName").value.trim();
+
+      const phone =
+        document.getElementById("workerPhone").value.trim();
+
+      const specialty =
+        document.getElementById("workerSpecialty").value.trim();
+
+      const status =
+        document.getElementById("workerStatus").value;
+
+      const message =
+        document.getElementById("workerMessage");
+
+      const button =
+        document.getElementById("saveWorker");
+
+      if (!name || !phone) {
+        message.textContent = "Ism va telefonni kiriting.";
         return;
       }
 
-      data.orders.forEach(order => {
-        const card = document.createElement("div");
-        card.className = "order";
+      button.disabled = true;
+      message.textContent = "Saqlanmoqda...";
 
-        const title = document.createElement("h3");
-        title.textContent = "Buyurtma #" + order.id;
-        card.appendChild(title);
+      const workerData = {
+        name,
+        phone,
+        specialty,
+        status
+      };
 
-        const fields = [
-          ["Ism", order.name],
-          ["Telefon", order.phone],
-          ["Xizmat", order.service],
-          ["Manzil", order.address],
-          ["Izoh", order.details || "Yo'q"],
-          ["Sana", order.created_at]
-        ];
+      try {
+        if (editingWorkerId !== null) {
 
-        fields.forEach(([label, value]) => {
-          const p = document.createElement("p");
-          p.textContent = label + ": " + (value ?? "");
-          card.appendChild(p);
-        });
+          await api("/api/admin/ustalar/" + editingWorkerId, {
+            method: "PATCH",
+            body: JSON.stringify(workerData)
+          });
 
-        const statusLabel = document.createElement("p");
-        statusLabel.textContent = "Buyurtma holati: " + order.status;
-        card.appendChild(statusLabel);
+          message.textContent = "Usta muvaffaqiyatli yangilandi!";
 
-        const select = document.createElement("select");
+        } else {
 
-        statuses.forEach(status => {
-          const option = document.createElement("option");
-          option.value = status;
-          option.textContent = status;
-          option.selected = status === order.status;
-          select.appendChild(option);
-        });
+          await api("/api/admin/ustalar", {
+            method: "POST",
+            body: JSON.stringify(workerData)
+          });
 
-        select.addEventListener("change", async () => {
-          try {
-            await api("/api/admin/orders/" + order.id, {
-              method: "PATCH",
-              body: JSON.stringify({ status: select.value })
-            });
+          message.textContent = "Yangi usta muvaffaqiyatli qo'shildi!";
+        }
 
-            await loadDashboard();
-          } catch (error) {
-            alert("Holatni o'zgartirib bo'lmadi: " + error.message);
-          }
-        });
+        this.reset();
+        editingWorkerId = null;
 
-        card.appendChild(select);
-        ordersBox.appendChild(card);
+        document.getElementById("saveWorker").textContent =
+          "Ustani qo'shish";
+
+        document.getElementById("cancelEdit")
+          .classList.add("hidden");
+
+        await loadWorkers();
+
+      } catch (error) {
+        message.textContent = "Xatolik: " + error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+  // =====================================
+  // USTANI TAHRIRLASH
+  // =====================================
+
+  function editWorker(worker) {
+    editingWorkerId = worker.id;
+
+    document.getElementById("workerName").value =
+      worker.name || "";
+
+    document.getElementById("workerPhone").value =
+      worker.phone || "";
+
+    document.getElementById("workerSpecialty").value =
+      worker.specialty || "";
+
+    document.getElementById("workerStatus").value =
+      worker.status || "Faol";
+
+    document.getElementById("saveWorker").textContent =
+      "O'zgarishlarni saqlash";
+
+    document.getElementById("cancelEdit")
+      .classList.remove("hidden");
+
+    document.getElementById("workerMessage").textContent =
+      "Usta #" + worker.id + " tahrirlanmoqda.";
+
+    document.getElementById("workerForm")
+      .scrollIntoView({ behavior: "smooth" });
+  }
+
+  // =====================================
+  // TAHRIRLASHNI BEKOR QILISH
+  // =====================================
+
+  function cancelWorkerEdit() {
+    editingWorkerId = null;
+
+    document.getElementById("workerForm").reset();
+
+    document.getElementById("saveWorker").textContent =
+      "Ustani qo'shish";
+
+    document.getElementById("cancelEdit")
+      .classList.add("hidden");
+
+    document.getElementById("workerMessage").textContent = "";
+  }
+
+  // =====================================
+  // USTANI O'CHIRISH
+  // =====================================
+
+  async function deleteWorker(id, name) {
+    const confirmed = confirm(
+      name + " ismli ustani o'chirmoqchimisiz?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await api("/api/admin/ustalar/" + id, {
+        method: "DELETE"
       });
 
+      alert("Usta muvaffaqiyatli o'chirildi.");
+
+      if (editingWorkerId === id) {
+        cancelWorkerEdit();
+      }
+
+      await loadWorkers();
+
     } catch (error) {
-      ordersBox.textContent = "Xatolik: " + error.message;
+      alert("O'chirishda xatolik: " + error.message);
     }
   }
 
+  // =====================================
+  // ADMIN PANELDAN CHIQISH
+  // =====================================
+
   function logout() {
     adminPassword = "";
+    editingWorkerId = null;
+
     document.getElementById("password").value = "";
-    document.getElementById("dashboard").classList.add("hidden");
-    document.getElementById("login").classList.remove("hidden");
+
+    document.getElementById("dashboard")
+      .classList.add("hidden");
+
+    document.getElementById("login")
+      .classList.remove("hidden");
+
+    cancelWorkerEdit();
   }
+
+  // ENTER BOSILGANDA KIRISH
+  document.getElementById("password")
+    .addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        loginAdmin();
+      }
+    });
+
 </script>
 </body>
 </html>
