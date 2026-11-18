@@ -169,6 +169,13 @@ export default {
           "X-Telegram-Bot-Api-Secret-Token"
         );
 
+      console.log("WEBHOOK SECRET CHECK:", {
+  envExists: Boolean(env.CUSTOMER_BOT_WEBHOOK_SECRET),
+  envLength: env.CUSTOMER_BOT_WEBHOOK_SECRET?.length || 0,
+  headerExists: Boolean(secret),
+  headerLength: secret?.length || 0,
+  matches: secret === env.CUSTOMER_BOT_WEBHOOK_SECRET
+});
         if (
           !env.CUSTOMER_BOT_WEBHOOK_SECRET ||
           secret !== env.CUSTOMER_BOT_WEBHOOK_SECRET
