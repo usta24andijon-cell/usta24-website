@@ -9,6 +9,17 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "usta24_db",
+      "database_id": "7cb3e63f-f446-40da-b24f-9ad56213fef9"
+    }
+  ],
+  "vars": {
+    "TELEGRAM_CHAT_ID": "-1003973917438",
+    "USTA24_CHAT_ID": "9051271486"
+  },
   "observability": {
     "enabled": true
   }
