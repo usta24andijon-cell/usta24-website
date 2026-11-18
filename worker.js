@@ -428,6 +428,27 @@ export default {
       }
 
       // =====================================
+      // 12.5. ASOSIY SAYT UCHUN FAOL USTALAR
+      // =====================================
+
+      if (
+        url.pathname === "/api/ustalar" &&
+        request.method === "GET"
+      ) {
+        const result = await env.DB.prepare(`
+          SELECT id, name, phone, specialty
+          FROM ustalar
+          WHERE status = 'Faol'
+          ORDER BY id DESC
+        `).all();
+
+        return jsonResponse({
+          success: true,
+          ustalar: result.results
+        });
+      }
+
+      // =====================================
       // 13. TOPILMAGAN API
       // =====================================
 
