@@ -100,7 +100,7 @@
     .order select, .worker select {
       margin-top: 10px;
       width: 100%;
-      max-width: 300px;
+      max-width: 400px;
     }
 
     .form-grid {
@@ -210,8 +210,8 @@
       <h2>➕ Yangi usta qo‘shish</h2>
 
       <form id="workerForm">
-
         <div class="form-grid">
+
           <input
             type="text"
             id="workerName"
@@ -236,6 +236,7 @@
             <option value="Faol">Faol</option>
             <option value="Nofaol">Nofaol</option>
           </select>
+
         </div>
 
         <br>
@@ -254,7 +255,6 @@
         </button>
 
         <p id="workerMessage" class="message"></p>
-
       </form>
     </div>
 
@@ -273,12 +273,12 @@
     </div>
 
   </section>
-
 </div>
 
 <script>
   let adminPassword = "";
   let editingWorkerId = null;
+  let workersList = [];
 
   const statuses = [
     "Yangi",
@@ -358,8 +358,9 @@
   async function loadDashboard() {
     try {
       await loadStats();
-      await loadOrders();
       await loadWorkers();
+      await loadOrders();
+
     } catch (error) {
       alert("Ma'lumotlarni yuklashda xatolik: " + error.message);
     }
@@ -409,7 +410,7 @@
       card.className = "order";
 
       const title = document.createElement("h3");
-      title.textContent = "Buyurtma #" + order.id;
+      title.textContent = "📋 Buyurtma #" + order.id;
       card.appendChild(title);
 
       const fields = [
@@ -418,7 +419,9 @@
         ["Xizmat", order.service],
         ["Manzil", order.address],
         ["Izoh", order.details || "Yo'q"],
-        ["Sana", order.created_at || ""]
+        ["Sana", order.created_at || ""],
+        ["Biriktirilgan usta", order.worker_name || "Hali biriktirilmagan"],
+        ["Usta telefoni", order.worker_phone || "—"]
       ];
 
       fields.forEach(([label, value]) => {
@@ -427,42 +430,128 @@
         card.appendChild(p);
       });
 
-      const label = document.createElement("p");
-      label.textContent = "Buyurtma holati:";
-      card.appendChild(label);
+      // BUYURTMA HOLATI
+      const statusLabel = document.createElement("p");
+      statusLabel.textContent = "Buyurtma holati:";
+      card.appendChild(statusLabel);
 
-      const select = document.createElement("select");
+      const statusSelect = document.createElement("select");
 
       statuses.forEach(status => {
         const option = document.createElement("option");
         option.value = status;
         option.textContent = status;
         option.selected = status === order.status;
-        select.appendChild(option);
+        statusSelect.appendChild(option);
       });
 
-      select.addEventListener("change", async () => {
-        select.disabled = true;
+      statusSelect.addEventListener("change", async () => {
+        const oldStatus = order.status;
+        statusSelect.disabled = true;
 
         try {
           await api("/api/admin/orders/" + order.id, {
             method: "PATCH",
             body: JSON.stringify({
-              status: select.value
+              status: statusSelect.value
             })
           });
 
+          order.status = statusSelect.value;
           await loadStats();
 
         } catch (error) {
           alert("Holatni o'zgartirib bo'lmadi: " + error.message);
-          select.value = order.status;
+          statusSelect.value = oldStatus;
         } finally {
-          select.disabled = false;
+          statusSelect.disabled = false;
         }
       });
 
-      card.appendChild(select);
+      card.appendChild(statusSelect);
+
+      // USTANI TANLASH
+      const workerLabel = document.createElement("p");
+      workerLabel.textContent = "👷 Buyurtmaga usta tanlang:";
+      card.appendChild(workerLabel);
+
+      const workerSelect = document.createElement("select");
+      workerSelect.style.display = "block";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Ustani tanlang";
+      workerSelect.appendChild(placeholder);
+
+      const activeWorkers = workersList.filter(
+        worker => worker.status === "Faol"
+      );
+
+      activeWorkers.forEach(worker => {
+        const option = document.createElement("option");
+
+        option.value = String(worker.id);
+        option.textContent =
+          worker.name + " — " + worker.phone;
+
+        if (
+          worker.name === order.worker_name &&
+          worker.phone === order.worker_phone
+        ) {
+          option.selected = true;
+        }
+
+        workerSelect.appendChild(option);
+      });
+
+      card.appendChild(workerSelect);
+
+      // BIRIKTIRISH TUGMASI
+      const assignButton = document.createElement("button");
+      assignButton.textContent = "Ustaga biriktirish";
+      assignButton.className = "success";
+
+      assignButton.addEventListener("click", async () => {
+        const worker = workersList.find(
+          item => String(item.id) === workerSelect.value
+        );
+
+        if (!worker || worker.status !== "Faol") {
+          alert("Avval faol ustani tanlang.");
+          return;
+        }
+
+        const confirmed = confirm(
+          worker.name + " ustasini #" + order.id +
+          " buyurtmaga biriktirasizmi?"
+        );
+
+        if (!confirmed) return;
+
+        assignButton.disabled = true;
+
+        try {
+          await api("/api/admin/orders/" + order.id, {
+            method: "PATCH",
+            body: JSON.stringify({
+              worker_name: worker.name,
+              worker_phone: worker.phone
+            })
+          });
+
+          alert("Usta buyurtmaga muvaffaqiyatli biriktirildi!");
+
+          await loadStats();
+          await loadOrders();
+
+        } catch (error) {
+          alert("Biriktirishda xatolik: " + error.message);
+        } finally {
+          assignButton.disabled = false;
+        }
+      });
+
+      card.appendChild(assignButton);
       box.appendChild(card);
     });
   }
@@ -478,14 +567,16 @@
 
     const data = await api("/api/admin/ustalar");
 
+    workersList = data.ustalar || [];
+
     box.replaceChildren();
 
-    if (!data.ustalar.length) {
+    if (!workersList.length) {
       box.textContent = "Hozircha ustalar mavjud emas.";
       return;
     }
 
-    data.ustalar.forEach(worker => {
+    workersList.forEach(worker => {
       const card = document.createElement("div");
       card.className = "worker";
 
@@ -507,6 +598,7 @@
 
       const status = document.createElement("p");
       status.textContent = "Holati: " + worker.status;
+
       status.className =
         worker.status === "Faol" ? "active" : "inactive";
 
@@ -607,6 +699,7 @@
           .classList.add("hidden");
 
         await loadWorkers();
+        await loadOrders();
 
       } catch (error) {
         message.textContent = "Xatolik: " + error.message;
@@ -688,6 +781,7 @@
       }
 
       await loadWorkers();
+      await loadOrders();
 
     } catch (error) {
       alert("O'chirishda xatolik: " + error.message);
@@ -701,6 +795,7 @@
   function logout() {
     adminPassword = "";
     editingWorkerId = null;
+    workersList = [];
 
     document.getElementById("password").value = "";
 
