@@ -34,9 +34,15 @@ export default {
       }
     };
 
-    // Telegram xabar yuborish
+    // TELEGRAM XABAR YUBORISH
     const sendTelegram = async (chatId, message) => {
-      if (!env.TELEGRAM_BOT_TOKEN || !chatId) {
+      if (!env.TELEGRAM_BOT_TOKEN) {
+        console.error("TELEGRAM_BOT_TOKEN SOZLANMAGAN");
+        return false;
+      }
+
+      if (!chatId) {
+        console.error("TELEGRAM CHAT_ID SOZLANMAGAN");
         return false;
       }
 
@@ -58,9 +64,21 @@ export default {
         );
 
         const result = await response.json();
-        return response.ok && result.ok === true;
+
+        if (!response.ok || result.ok !== true) {
+          console.error(
+            "TELEGRAM API XATOSI:",
+            response.status,
+            result.description || JSON.stringify(result)
+          );
+          return false;
+        }
+
+        console.log("TELEGRAM XABARI YUBORILDI");
+        return true;
+
       } catch (error) {
-        console.error("Telegram xatosi:", error);
+        console.error("TELEGRAM ULANISH XATOSI:", error);
         return false;
       }
     };
@@ -369,7 +387,6 @@ export default {
       }
 
       // 9. BUYURTMAGA USTA BIRIKTIRISH
-      // USTA24 TELEGRAMIGA XABAR YUBORISH
 
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
@@ -437,7 +454,7 @@ export default {
             WHERE id = ?
           `).bind(workerName, workerPhone, id).run();
 
-          // USTA24 TELEGRAMIGA BUYURTMA XABARI
+          // USTA24 TELEGRAMIGA XABAR
 
           const workerMessage =
             "🔔 USTA 24 — YANGI BUYURTMA BIRIKTIRILDI\n\n" +
@@ -527,4 +544,3 @@ export default {
     }
   }
 };
-
