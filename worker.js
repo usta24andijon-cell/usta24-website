@@ -27,7 +27,10 @@ export default {
   hasColon: env.TELEGRAM_BOT_TOKEN?.includes(":")
 });
 
-         const telegram = await fetch(
+         const telegram = await fetch(const check = await fetch(
+  `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`
+);
+console.log("TELEGRAM GETME:", check.status, await check.text());
           `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
           {
             method: "POST",
