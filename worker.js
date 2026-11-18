@@ -277,9 +277,15 @@ export default {
 
       // Oddiy sayt fayllarini chiqarish
       return env.ASSETS.fetch(request);
+} catch (error) {
+  console.error("SERVER ERROR DETAILS:", error?.message, error?.stack);
 
-    } catch (error) {
-      console.error("Server xatosi:", error);
+  return jsonResponse(
+    { error: error?.message || "Server xatosi" },
+    500
+  );
+}
+    
 
       return jsonResponse(
         { error: "Server xatosi" },
