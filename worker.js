@@ -3,7 +3,6 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // JSON javob
     const jsonResponse = (data, status = 200) => {
       return new Response(JSON.stringify(data), {
         status,
@@ -14,7 +13,6 @@ export default {
       });
     };
 
-    // Admin parolini tekshirish
     const checkAdmin = () => {
       const auth = request.headers.get("Authorization") || "";
       const password = auth.startsWith("Bearer ")
@@ -28,7 +26,6 @@ export default {
       );
     };
 
-    // JSON body o'qish
     const readBody = async () => {
       try {
         return await request.json();
@@ -37,12 +34,40 @@ export default {
       }
     };
 
-    // API xatolarini qayta ishlash
+    // Telegram xabar yuborish
+    const sendTelegram = async (chatId, message) => {
+      if (!env.TELEGRAM_BOT_TOKEN || !chatId) {
+        return false;
+      }
+
+      try {
+        const response = await fetch(
+          "https://api.telegram.org/bot" +
+          env.TELEGRAM_BOT_TOKEN +
+          "/sendMessage",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message
+            })
+          }
+        );
+
+        const result = await response.json();
+        return response.ok && result.ok === true;
+      } catch (error) {
+        console.error("Telegram xatosi:", error);
+        return false;
+      }
+    };
+
     try {
 
-      // =====================================
-      // 1. MIJOZ BUYURTMASI YUBORISH
-      // =====================================
+      // 1. MIJOZ BUYURTMASI
 
       if (
         url.pathname === "/api/order" &&
@@ -91,45 +116,20 @@ export default {
 
         const orderId = saved.meta?.last_row_id || null;
 
-        // Telegram xabari
-        let telegramSent = false;
+        const message =
+          "🆕 USTA 24 — YANGI BUYURTMA\n\n" +
+          "🆔 Buyurtma: #" + (orderId || "") + "\n" +
+          "👤 Ism: " + name + "\n" +
+          "📞 Telefon: " + phone + "\n" +
+          "🔧 Xizmat: " + service + "\n" +
+          "📍 Manzil: " + address + "\n" +
+          "📝 Izoh: " + (details || "Yo'q") + "\n" +
+          "📌 Holat: Yangi";
 
-        if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-          try {
-            const message =
-              "🆕 USTA 24 — YANGI BUYURTMA\n\n" +
-              "🆔 Buyurtma: #" + (orderId || "") + "\n" +
-              "👤 Ism: " + name + "\n" +
-              "📞 Telefon: " + phone + "\n" +
-              "🔧 Xizmat: " + service + "\n" +
-              "📍 Manzil: " + address + "\n" +
-              "📝 Izoh: " + (details || "Yo'q") + "\n" +
-              "📌 Holat: Yangi";
-
-            const telegramResponse = await fetch(
-              "https://api.telegram.org/bot" +
-              env.TELEGRAM_BOT_TOKEN +
-              "/sendMessage",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  chat_id: env.TELEGRAM_CHAT_ID,
-                  text: message
-                })
-              }
-            );
-
-            const telegramResult = await telegramResponse.json();
-            telegramSent =
-              telegramResponse.ok && telegramResult.ok === true;
-
-          } catch (error) {
-            console.error("Telegram xatosi:", error);
-          }
-        }
+        const telegramSent = await sendTelegram(
+          env.TELEGRAM_CHAT_ID,
+          message
+        );
 
         return jsonResponse({
           success: true,
@@ -139,9 +139,7 @@ export default {
         });
       }
 
-      // =====================================
-      // 2. SAYTDA FAOL USTALARNI KO'RSATISH
-      // =====================================
+      // 2. SAYTDA FAOL USTALAR
 
       if (
         url.pathname === "/api/ustalar" &&
@@ -160,9 +158,7 @@ export default {
         });
       }
 
-      // =====================================
-      // 3. ADMIN API UCHUN RUXSAT
-      // =====================================
+      // 3. ADMIN RUXSATI
 
       if (url.pathname.startsWith("/api/admin/")) {
         if (!checkAdmin()) {
@@ -173,9 +169,7 @@ export default {
         }
       }
 
-      // =====================================
       // 4. ADMIN STATISTIKASI
-      // =====================================
 
       if (
         url.pathname === "/api/admin/stats" &&
@@ -210,9 +204,7 @@ export default {
         });
       }
 
-      // =====================================
-      // 5. ADMIN BUYURTMALAR RO'YXATI
-      // =====================================
+      // 5. ADMIN BUYURTMALARI
 
       if (
         url.pathname === "/api/admin/orders" &&
@@ -240,9 +232,7 @@ export default {
         });
       }
 
-      // =====================================
-      // 6. USTALAR RO'YXATI VA QO'SHISH
-      // =====================================
+      // 6. USTALAR RO'YXATI
 
       if (
         url.pathname === "/api/admin/ustalar" &&
@@ -259,6 +249,8 @@ export default {
           ustalar: result.results || []
         });
       }
+
+      // 7. USTA QO'SHISH
 
       if (
         url.pathname === "/api/admin/ustalar" &&
@@ -301,9 +293,7 @@ export default {
         });
       }
 
-      // =====================================
-      // 7. USTANI TAHRIRLASH VA O'CHIRISH
-      // =====================================
+      // 8. USTANI TAHRIRLASH VA O'CHIRISH
 
       if (
         url.pathname.startsWith("/api/admin/ustalar/") &&
@@ -378,9 +368,8 @@ export default {
         });
       }
 
-      // =====================================
-      // 8. BUYURTMA HOLATI VA USTANI BIRIKTIRISH
-      // =====================================
+      // 9. BUYURTMAGA USTA BIRIKTIRISH
+      // USTA24 TELEGRAMIGA XABAR YUBORISH
 
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
@@ -403,7 +392,7 @@ export default {
         }
 
         const order = await env.DB.prepare(`
-          SELECT id FROM orders WHERE id = ?
+          SELECT * FROM orders WHERE id = ?
         `).bind(id).first();
 
         if (!order) {
@@ -413,6 +402,7 @@ export default {
         }
 
         // USTANI BIRIKTIRISH
+
         if (
           data.worker_name !== undefined ||
           data.worker_phone !== undefined
@@ -447,17 +437,38 @@ export default {
             WHERE id = ?
           `).bind(workerName, workerPhone, id).run();
 
+          // USTA24 TELEGRAMIGA BUYURTMA XABARI
+
+          const workerMessage =
+            "🔔 USTA 24 — YANGI BUYURTMA BIRIKTIRILDI\n\n" +
+            "🆔 Buyurtma: #" + id + "\n" +
+            "👤 Mijoz: " + order.name + "\n" +
+            "📞 Telefon: " + order.phone + "\n" +
+            "🔧 Xizmat: " + order.service + "\n" +
+            "📍 Manzil: " + order.address + "\n" +
+            "📝 Izoh: " + (order.details || "Yo'q") + "\n" +
+            "👨‍🔧 Biriktirilgan usta: " + workerName + "\n" +
+            "📱 Usta telefoni: " + workerPhone + "\n" +
+            "📌 Holat: Ustaga biriktirildi";
+
+          const workerTelegramSent = await sendTelegram(
+            env.USTA24_CHAT_ID,
+            workerMessage
+          );
+
           return jsonResponse({
             success: true,
             message: "Usta buyurtmaga biriktirildi",
             orderId: id,
             worker_name: workerName,
             worker_phone: workerPhone,
-            status: "Ustaga biriktirildi"
+            status: "Ustaga biriktirildi",
+            workerTelegramSent
           });
         }
 
         // BUYURTMA HOLATINI O'ZGARTIRISH
+
         const allowedStatuses = [
           "Yangi",
           "Qabul qilindi",
@@ -487,9 +498,7 @@ export default {
         });
       }
 
-      // =====================================
-      // 9. TOPILMAGAN API
-      // =====================================
+      // 10. TOPILMAGAN API
 
       if (url.pathname.startsWith("/api/")) {
         return jsonResponse({
@@ -498,9 +507,7 @@ export default {
         }, 404);
       }
 
-      // =====================================
-      // 10. SAYT FAYLLARINI OCHISH
-      // =====================================
+      // 11. SAYT FAYLLARI
 
       if (env.ASSETS) {
         return await env.ASSETS.fetch(request);
@@ -520,3 +527,4 @@ export default {
     }
   }
 };
+
