@@ -225,19 +225,24 @@ export default {
     try {
 
       // 1. MIJOZ TELEGRAM BOTI WEBHOOK
-
       if (
         url.pathname === "/api/customer-telegram-webhook" &&
         request.method === "POST"
       ) {
-        const secret = request.headers.get(
-          "X-Telegram-Bot-Api-Secret-Token"
-        );
+        const secret = String(
+          request.headers.get("X-Telegram-Bot-Api-Secret-Token") || ""
+        ).trim();
 
-        if (
-          !env.CUSTOMER_BOT_WEBHOOK_SECRET ||
-          secret !== env.CUSTOMER_BOT_WEBHOOK_SECRET
-        ) {
+        const expectedSecret = String(
+          env.CUSTOMER_BOT_WEBHOOK_SECRET || ""
+        ).trim();
+
+        if (!expectedSecret || !secret || secret !== expectedSecret) {
+          console.error("MIJOZ WEBHOOK SECRET MOS EMAS", {
+            expectedLength: expectedSecret.length,
+            receivedLength: secret.length
+          });
+
           return jsonResponse({
             success: false,
             error: "Webhook ruxsati yo'q"
@@ -261,7 +266,6 @@ export default {
         const chatId = String(msg.chat.id);
         const messageText = String(msg.text || "");
 
-        // MIJOZ START BOSGANDA
         if (messageText.startsWith("/start")) {
           await sendCustomerTelegram(
             chatId,
@@ -286,7 +290,6 @@ export default {
           return jsonResponse({ success: true });
         }
 
-        // MIJOZ TELEFONINI YUBORGANDA
         if (msg.contact) {
           const contact = msg.contact;
 
@@ -345,19 +348,24 @@ export default {
       }
 
       // 2. USTA TELEGRAM BOTI WEBHOOK
-
       if (
         url.pathname === "/api/worker-telegram-webhook" &&
         request.method === "POST"
       ) {
-        const secret = request.headers.get(
-          "X-Telegram-Bot-Api-Secret-Token"
-        );
+        const secret = String(
+          request.headers.get("X-Telegram-Bot-Api-Secret-Token") || ""
+        ).trim();
 
-        if (
-          !env.WORKER_BOT_WEBHOOK_SECRET ||
-          secret !== env.WORKER_BOT_WEBHOOK_SECRET
-        ) {
+        const expectedSecret = String(
+          env.WORKER_BOT_WEBHOOK_SECRET || ""
+        ).trim();
+
+        if (!expectedSecret || !secret || secret !== expectedSecret) {
+          console.error("WORKER WEBHOOK SECRET MOS EMAS", {
+            expectedLength: expectedSecret.length,
+            receivedLength: secret.length
+          });
+
           return jsonResponse({
             success: false,
             error: "Webhook ruxsati yo'q"
@@ -503,7 +511,6 @@ export default {
             return jsonResponse({ success: true });
           }
 
-          // TELEGRAM CHAT ID ORQALI USTANI TOPISH
           const worker = await env.DB.prepare(`
             SELECT id, name, phone
             FROM ustalar
@@ -528,7 +535,6 @@ export default {
             LIMIT 1
           `).bind(orderId).first();
 
-          // BUYURTMA HAQIQATAN SHU USTAGA BIRIKTIRILGANINI TEKSHIRISH
           if (
             !order ||
             !order.worker_phone ||
@@ -542,7 +548,6 @@ export default {
             return jsonResponse({ success: true });
           }
 
-          // HOLATLAR KETMA-KETLIGINI TEKSHIRISH
           const allowed = {
             accept: ["Ustaga biriktirildi", "Qabul qilindi"],
             start: ["Qabul qilindi", "Bajarilmoqda"],
@@ -576,7 +581,6 @@ export default {
             "Holat yangilandi: " + newStatus
           );
 
-          // MIJOZGA XABAR
           await notifyCustomer(
             order.phone,
             "📢 USTA 24 — BUYURTMANGIZ HOLATI YANGILANDI\n\n" +
@@ -587,7 +591,6 @@ export default {
             "\n\nUSTA 24 xizmatidan foydalanganingiz uchun rahmat!"
           );
 
-          // ADMINGA XABAR
           await sendTelegram(
             env.USTA24_CHAT_ID,
             "👨‍🔧 USTA BUYURTMA HOLATINI O'ZGARTIRDI\n\n" +
@@ -597,7 +600,6 @@ export default {
             "\n📌 Yangi holat: " + newStatus
           );
 
-          // ESKI TUGMALARNI OLIB TASHLASH
           if (
             callback.message?.chat?.id &&
             callback.message?.message_id
@@ -645,7 +647,6 @@ export default {
       }
 
       // 3. MIJOZ BUYURTMASI
-
       if (
         url.pathname === "/api/order" &&
         request.method === "POST"
@@ -693,7 +694,6 @@ export default {
 
         const orderId = saved.meta?.last_row_id || null;
 
-        // ADMIN TELEGRAM GURUHIGA XABAR
         const adminMessage =
           "🆕 USTA 24 — YANGI BUYURTMA\n\n" +
           "🆔 Buyurtma: #" + (orderId || "") + "\n" +
@@ -715,7 +715,6 @@ export default {
           console.error("ADMIN GURUH XABAR XATOSI:", error);
         }
 
-        // MIJOZGA BUYURTMA QABUL QILINGANI HAQIDA XABAR
         const customerMessage =
           "✅ USTA 24 — BUYURTMANGIZ QABUL QILINDI\n\n" +
           "🆔 Buyurtma: #" + (orderId || "") + "\n" +
@@ -738,7 +737,6 @@ export default {
       }
 
       // 4. SAYTDA FAOL USTALAR
-
       if (
         url.pathname === "/api/ustalar" &&
         request.method === "GET"
@@ -757,7 +755,6 @@ export default {
       }
 
       // 5. ADMIN RUXSATI
-
       if (url.pathname.startsWith("/api/admin/")) {
         if (!checkAdmin()) {
           return jsonResponse({
@@ -768,7 +765,6 @@ export default {
       }
 
       // 6. ADMIN STATISTIKASI
-
       if (
         url.pathname === "/api/admin/stats" &&
         request.method === "GET"
@@ -803,7 +799,6 @@ export default {
       }
 
       // 7. ADMIN BUYURTMALARI
-
       if (
         url.pathname === "/api/admin/orders" &&
         request.method === "GET"
@@ -831,7 +826,6 @@ export default {
       }
 
       // 8. USTALAR RO'YXATI
-
       if (
         url.pathname === "/api/admin/ustalar" &&
         request.method === "GET"
@@ -849,7 +843,6 @@ export default {
       }
 
       // 9. USTA QO'SHISH
-
       if (
         url.pathname === "/api/admin/ustalar" &&
         request.method === "POST"
@@ -897,7 +890,6 @@ export default {
       }
 
       // 10. USTANI TAHRIRLASH VA O'CHIRISH
-
       if (
         url.pathname.startsWith("/api/admin/ustalar/") &&
         ["PATCH", "DELETE"].includes(request.method)
@@ -978,7 +970,6 @@ export default {
       }
 
       // 11. BUYURTMAGA USTA BIRIKTIRISH VA HOLATNI O'ZGARTIRISH
-
       if (
         url.pathname.startsWith("/api/admin/orders/") &&
         request.method === "PATCH"
@@ -1010,7 +1001,6 @@ export default {
         }
 
         // USTANI BIRIKTIRISH
-
         if (
           data.worker_name !== undefined ||
           data.worker_phone !== undefined
@@ -1052,7 +1042,6 @@ export default {
             id
           ).run();
 
-          // ADMIN TELEGRAMIGA XABAR
           const workerMessage =
             "🔔 USTA 24 — YANGI BUYURTMA BIRIKTIRILDI\n\n" +
             "🆔 Buyurtma: #" + id + "\n" +
@@ -1079,7 +1068,6 @@ export default {
             );
           }
 
-          // MIJOZGA USTA BIRIKTIRILGANI HAQIDA XABAR
           const customerMessage =
             "👨‍🔧 USTA 24 — SIZGA USTA BIRIKTIRILDI\n\n" +
             "🆔 Buyurtma: #" + id + "\n" +
@@ -1094,7 +1082,6 @@ export default {
             customerMessage
           );
 
-          // BUYURTMA BIRIKTIRILGAN USTAGA BOT ORQALI YUBORISH
           const assignedWorker = await env.DB.prepare(`
             SELECT id, name, phone, telegram_chat_id
             FROM ustalar
@@ -1160,7 +1147,6 @@ export default {
         }
 
         // BUYURTMA HOLATINI O'ZGARTIRISH
-
         const allowedStatuses = [
           "Yangi",
           "Qabul qilindi",
@@ -1185,7 +1171,6 @@ export default {
           id
         ).run();
 
-        // MIJOZGA HOLAT O'ZGARGANI HAQIDA XABAR
         const statusMessage =
           "📢 USTA 24 — BUYURTMANGIZ HOLATI YANGILANDI\n\n" +
           "🆔 Buyurtma: #" + id + "\n" +
@@ -1212,7 +1197,6 @@ export default {
       }
 
       // 12. TOPILMAGAN API
-
       if (url.pathname.startsWith("/api/")) {
         return jsonResponse({
           success: false,
@@ -1221,7 +1205,6 @@ export default {
       }
 
       // 13. SAYT FAYLLARI
-
       if (env.ASSETS) {
         return await env.ASSETS.fetch(request);
       }
