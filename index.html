@@ -33,6 +33,8 @@ button{font-size:16px}
 footer{text-align:center;background:#102b50;color:white;padding:22px}
 .note{font-size:13px;color:#687386;line-height:1.5}
 .loading{text-align:center;color:#687386;grid-column:1/-1}
+.telegram-box{background:#e8f4ff;padding:15px;border-radius:10px;margin:10px 0 18px}
+.telegram-box p{line-height:1.5}
 </style>
 </head>
 
@@ -83,6 +85,23 @@ footer{text-align:center;background:#102b50;color:white;padding:22px}
 <label>Телефон рақамингиз</label>
 <input name="phone" type="tel" placeholder="+998 __ ___ __ __" required>
 
+<!-- TELEGRAM ULANISH -->
+<div class="telegram-box">
+<p><strong>📲 Buyurtma holatini Telegram orqali olish</strong></p>
+
+<a href="https://t.me/usta24_mijoz_bot"
+   target="_blank"
+   rel="noopener noreferrer"
+   class="btn">
+   Telegram botga ulanish
+</a>
+
+<p class="note">
+Telegram botga kiring, START tugmasini bosing va
+telefon raqamingizni yuboring.
+</p>
+</div>
+
 <label>Хизмат тури</label>
 <select name="service" required>
 <option value="">Хизматни танланг</option>
@@ -126,9 +145,7 @@ footer{text-align:center;background:#102b50;color:white;padding:22px}
 
 <script>
 
-// =====================================
 // 1. ADMIN PANELDAN USTALARNI OLISH
-// =====================================
 
 async function loadMasters() {
   const list = document.getElementById("mastersList");
@@ -179,9 +196,8 @@ async function loadMasters() {
 
 loadMasters();
 
-// =====================================
+
 // 2. BUYURTMA YUBORISH
-// =====================================
 
 const form = document.getElementById("orderForm");
 
@@ -228,4 +244,3 @@ form.addEventListener("submit", async function(event) {
 
 </body>
 </html>
-
