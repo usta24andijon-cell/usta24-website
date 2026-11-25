@@ -185,12 +185,15 @@ export default {
         if (!d) return json({ success: false, error: "Ma'lumot noto'g'ri" }, 400);
         const name = str(d.name, 150), rawPhone = str(d.phone, 40), service = str(d.service, 150), address = str(d.address, 300), details = str(d.details, 2000);
         if (!name || !rawPhone || !service || !address) return json({ success: false, error: "Ism, telefon, xizmat va manzil majburiy" }, 400);
+        const phoneDigits = rawPhone.replace(/\D/g, "");
+        if (!/^998\d{9}$/.test(phoneDigits)) return json({ success: false, error: "Faqat O‘zbekiston raqami qabul qilinadi: +998 dan keyin 9 ta raqam kiriting." }, 400);
+        const uzPhone = "+" + phoneDigits;
         const saved = await env.DB.prepare(`INSERT INTO orders (name, phone, service, address, details, status, created_at, source)
-          VALUES (?, ?, ?, ?, ?, 'Yangi', datetime('now'), 'Veb-sayt')`).bind(name, rawPhone, service, address, details).run();
+          VALUES (?, ?, ?, ?, ?, 'Yangi', datetime('now'), 'Veb-sayt')`).bind(name, uzPhone, service, address, details).run();
         const id = saved.meta?.last_row_id;
-        await ensureCustomer(name, rawPhone, address);
-        const tg = await notifyAdmin(`🆕 USTA 24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${rawPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi\n🌐 Manba: Veb-sayt`);
-        const customerNotified = await notifyCustomer(rawPhone, `✅ USTA 24 — BUYURTMANGIZ QABUL QILINDI\n🆔 #${id}\n🔧 ${service}\n📌 Yangi`);
+        await ensureCustomer(name, uzPhone, address);
+        const tg = await notifyAdmin(`🆕 USTA 24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${uzPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi\n🌐 Manba: Veb-sayt`);
+        const customerNotified = await notifyCustomer(uzPhone, `✅ USTA 24 — BUYURTMANGIZ QABUL QILINDI\n🆔 #${id}\n🔧 ${service}\n📌 Yangi`);
         return json({ success: true, message: "Buyurtma saqlandi", orderId: id, telegramSent: tg, customerNotified });
       }
 
