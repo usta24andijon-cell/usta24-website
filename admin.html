@@ -439,14 +439,26 @@ function workerSelected(){
   $("workerInfo").textContent="Usta tanlanmagan. Faol ustalardan birini tanlang.";
  }
 }
+
 async function saveOrder(id){
  try{
-  const price=Number($("editPrice").value);
-  const status=$("editStatus").value;
-  if(!Number.isFinite(price)||price<0)throw new Error("Narxni to‘g‘ri kiriting");
-  if(status==="Tugallandi"&&price<=0)throw new Error("Ishni tugatish uchun narx kiriting");
-  const workerId=Number($("editWorker").value);
-  const selected=cachedWorkers.find(w=>Number(w.id)===workerId);
+  const price = Number($("editPrice").value);
+  let status = $("editStatus").value;
+
+  if(!Number.isFinite(price) || price < 0)
+   throw new Error("Narxni to‘g‘ri kiriting");
+
+  const workerId = Number($("editWorker").value);
+  const selected = cachedWorkers.find(w => Number(w.id) === workerId);
+
+  // Usta tanlangan, lekin holat Yangi bo‘lsa,
+  // avtomatik Ustaga biriktirildi qilamiz.
+  if(selected && status === "Yangi"){
+   status = "Ustaga biriktirildi";
+  }
+
+  if(status === "Tugallandi" && price <= 0)
+   throw new Error("Ishni tugatish uchun narx kiriting");
 
   // 1. Ustani alohida biriktirish
   if(selected){
@@ -456,7 +468,7 @@ async function saveOrder(id){
    });
   }
 
-  // 2. Buyurtma ma'lumotlari va narxni saqlash
+  // 2. Buyurtma ma'lumotlari, narx va holat
   await api("/orders/"+id,"PATCH",{
    name:$("editName").value.trim(),
    phone:$("editPhone").value.trim(),
@@ -468,10 +480,17 @@ async function saveOrder(id){
   });
 
   closeModal();
-  toast(status==="Tugallandi"?"Buyurtma tugallandi, komissiya hisoblandi":"Buyurtma va narx saqlandi");
+  toast(status==="Tugallandi"
+   ? "Buyurtma tugallandi, komissiya hisoblandi"
+   : "Buyurtma va narx saqlandi");
+
   await orders();
- }catch(e){toast(e.message)}
+
+ }catch(e){
+  toast(e.message);
+ }
 }
+
 
 // WORKERS
 async function workers(){
