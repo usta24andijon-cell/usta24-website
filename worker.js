@@ -62,6 +62,17 @@ export default {
       } catch (e) { console.error("Customer lookup error", e); return false; }
     };
     const notifyAdmin = (text) => adminTG(env.USTA24_CHAT_ID || env.TELEGRAM_CHAT_ID, text);
+    // Yangi buyurtmalar faqat faol ustalarning shaxsiy Telegram chatlariga yuboriladi.
+    // Admin/uy-servis guruhiga yangi buyurtma nusxasi yuborilmaydi.
+    const notifyWorkers = async (text) => {
+      if (!env.DB) return 0;
+      try {
+        const r = await env.DB.prepare("SELECT telegram_chat_id FROM ustalar WHERE status='Faol' AND telegram_chat_id IS NOT NULL AND telegram_chat_id != ''").all();
+        const ids = [...new Set((r.results || []).map(x => String(x.telegram_chat_id)))];
+        const results = await Promise.all(ids.map(id => workerTG(id, text)));
+        return results.filter(Boolean).length;
+      } catch (e) { console.error("Worker notification error", e); return 0; }
+    };
     const getOrder = id => env.DB.prepare("SELECT * FROM orders WHERE id = ? LIMIT 1").bind(id).first();
 
     // A completed order must have a price. UNIQUE(order_id) prevents duplicate commission rows.
@@ -207,9 +218,9 @@ export default {
           VALUES (?, ?, ?, ?, ?, 'Yangi', datetime('now'), 'Veb-sayt')`).bind(name, uzPhone, service, address, details).run();
         const id = saved.meta?.last_row_id;
         await ensureCustomer(name, uzPhone, address);
-        const tg = await notifyAdmin(`🆕 USTA 24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${uzPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi\n🌐 Manba: Veb-sayt`);
+        const tg = await notifyWorkers(`🆕 USTA24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${uzPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi\n\nBuyurtmani admin paneldan ustaga biriktirish mumkin.`);
         const customerNotified = await notifyCustomer(uzPhone, `✅ USTA 24 — BUYURTMANGIZ QABUL QILINDI\n🆔 #${id}\n🔧 ${service}\n📌 Yangi`);
-        return json({ success: true, message: "Buyurtma saqlandi", orderId: id, telegramSent: tg, customerNotified });
+        return json({ success: true, message: "Buyurtma saqlandi", orderId: id, telegramSent: tg > 0, workersNotified: tg, customerNotified });
       }
 
       // PUBLIC SITE CONTENT, GALLERY AND REVIEWS
