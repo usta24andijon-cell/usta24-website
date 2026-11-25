@@ -1438,7 +1438,7 @@ export default {
         return json({ success: true });
       }
 
-      // TOPILMAGAN API
+            // TOPILMAGAN API YO'LI
       if (path.startsWith("/api/")) {
         return json({
           success: false,
@@ -1446,17 +1446,20 @@ export default {
         }, 404);
       }
 
-      // SAYT VA ADMIN HTML FAYLLARI
+      // SAYT VA ADMIN FAYLLARI
       if (env.ASSETS) {
+        if (method === "GET" && path === "/") {
+          return env.ASSETS.fetch(
+            new Request(new URL("/index.html", url.origin), request)
+          );
+        }
+
         if (
           method === "GET" &&
-          (path === "/" || path === "/admin" || path === "/admin.html")
+          (path === "/admin" || path === "/admin.html")
         ) {
-          const assetPath = path === "/" ? "/index.html" : "/admin.html";
-          const assetUrl = new URL(assetPath, url.origin);
-
           return env.ASSETS.fetch(
-            new Request(assetUrl.toString(), request)
+            new Request(new URL("/admin.html", url.origin), request)
           );
         }
 
@@ -1464,7 +1467,7 @@ export default {
       }
 
       return new Response(
-        "USTA24 server ishlayapti, lekin ASSETS binding sozlanmagan.",
+        "ASSETS binding sozlanmagan",
         {
           status: 500,
           headers: {
@@ -1481,5 +1484,3 @@ export default {
         error: "Serverda xatolik yuz berdi"
       }, 500);
     }
-  }
-};
