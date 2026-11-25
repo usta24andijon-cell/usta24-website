@@ -2,245 +2,585 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>USTA 24 ANDIJON — Ishonchli ustalar</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#102b50">
 
-<style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#172033}
-header{background:#102b50;color:white;text-align:center;padding:24px 15px}
-header h1{margin:0;font-size:30px}
-header span{color:#ffb21c}
-header p{margin:8px 0 0}
-.hero{background:linear-gradient(135deg,#183d68,#102b50);color:white;text-align:center;padding:55px 18px}
-.hero h2{font-size:30px;margin:0 0 12px;color:white}
-.hero p{line-height:1.7}
-.btn{display:inline-block;background:#ffb21c;color:#14243a;padding:13px 20px;border-radius:8px;text-decoration:none;font-weight:bold;border:0;cursor:pointer;margin:6px}
-section{max-width:1000px;margin:auto;padding:35px 16px}
-h2{text-align:center;color:#102b50}
-.services,.masters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
-.service,.master{background:white;padding:22px 14px;text-align:center;border-radius:12px;box-shadow:0 2px 12px #0001}
-.service{font-weight:bold}
-.master h3{margin:10px 0 5px;color:#102b50}
-.avatar{font-size:42px}
-.master p{color:#596579;line-height:1.5}
-.order{background:white;padding:25px;border-radius:14px;box-shadow:0 2px 12px #0001}
-input,select,textarea{width:100%;padding:13px;margin:7px 0 14px;border:1px solid #ccd3df;border-radius:8px;font-size:16px}
-textarea{min-height:100px;resize:vertical}
-button{font-size:16px}
-.contact{text-align:center;background:#e8eef6;border-radius:12px;padding:25px}
-footer{text-align:center;background:#102b50;color:white;padding:22px}
-.note{font-size:13px;color:#687386;line-height:1.5}
-.loading{text-align:center;color:#687386;grid-column:1/-1}
-.telegram-box{background:#e8f4ff;padding:15px;border-radius:10px;margin:10px 0 18px}
-.telegram-box p{line-height:1.5}
-</style>
+  <title>USTA24 ANDIJON — Ishonchli ustalar xizmati</title>
+  <meta name="description" content="Andijon shahrida mebel, elektrik, santexnik, uy ta'mirlash va boshqa ustachilik xizmatlari. USTA24 orqali qulay onlayn buyurtma bering.">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6fa;
+      color: #172033;
+    }
+
+    header {
+      background: #102b50;
+      color: white;
+      text-align: center;
+      padding: 24px 15px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    header h1 span {
+      color: #ffb21c;
+    }
+
+    header p {
+      margin: 8px 0 0;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #183d68, #102b50);
+      color: white;
+      text-align: center;
+      padding: 65px 18px;
+    }
+
+    .hero h2 {
+      color: white;
+      font-size: 32px;
+      margin: 0 0 14px;
+    }
+
+    .hero p {
+      line-height: 1.7;
+      max-width: 600px;
+      margin: 0 auto 18px;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #ffb21c;
+      color: #14243a;
+      padding: 13px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+      border: 0;
+      cursor: pointer;
+      margin: 6px;
+      transition: 0.2s;
+    }
+
+    .btn:hover {
+      background: #f2a400;
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    section {
+      max-width: 1000px;
+      margin: auto;
+      padding: 38px 16px;
+    }
+
+    section h2 {
+      text-align: center;
+      color: #102b50;
+      margin: 0 0 24px;
+    }
+
+    .services,
+    .masters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+    }
+
+    .service,
+    .master {
+      background: white;
+      padding: 22px 14px;
+      text-align: center;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px #0001;
+    }
+
+    .service {
+      font-weight: bold;
+      line-height: 1.5;
+    }
+
+    .master h3 {
+      margin: 10px 0 5px;
+      color: #102b50;
+    }
+
+    .master p {
+      color: #596579;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .avatar {
+      font-size: 42px;
+    }
+
+    .order {
+      background: white;
+      padding: 25px;
+      border-radius: 14px;
+      box-shadow: 0 2px 12px #0001;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 13px;
+      margin: 7px 0 14px;
+      border: 1px solid #ccd3df;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+      background: white;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: 2px solid #ffb21c;
+      border-color: #ffb21c;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .order button {
+      font-size: 16px;
+    }
+
+    .contact {
+      text-align: center;
+      background: #e8eef6;
+      border-radius: 12px;
+      padding: 25px;
+    }
+
+    .contact h2 {
+      margin-top: 0;
+    }
+
+    footer {
+      text-align: center;
+      background: #102b50;
+      color: white;
+      padding: 22px;
+      line-height: 1.6;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #687386;
+      line-height: 1.6;
+    }
+
+    .loading {
+      text-align: center;
+      color: #687386;
+      grid-column: 1 / -1;
+    }
+
+    .telegram-box {
+      background: #e8f4ff;
+      padding: 15px;
+      border-radius: 10px;
+      margin: 12px 0 20px;
+    }
+
+    .telegram-box p {
+      line-height: 1.5;
+    }
+
+    #formMessage {
+      margin-top: 12px;
+      font-weight: bold;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 600px) {
+      header h1 {
+        font-size: 25px;
+      }
+
+      .hero {
+        padding: 48px 16px;
+      }
+
+      .hero h2 {
+        font-size: 25px;
+      }
+
+      section {
+        padding: 30px 14px;
+      }
+
+      .order {
+        padding: 18px;
+      }
+
+      .btn {
+        padding: 12px 16px;
+      }
+    }
+  </style>
 </head>
 
 <body>
 
-<header>
-<h1><span>USTA 24</span> ANDIJON</h1>
-<p>Уй ва хизматлар — бир жойда!</p>
-</header>
+  <header>
+    <h1><span>USTA24</span> ANDIJON</h1>
+    <p>Uy va xizmatlar — bir joyda!</p>
+  </header>
 
-<div class="hero">
-<h2>Сизга ишончли уста керакми?</h2>
-<p>Тажрибали усталар. Тезкор хизмат. Қулай буюртма.</p>
-<a class="btn" href="tel:+998770690003">Қўнғироқ қилиш</a>
-<a class="btn" href="https://t.me/usta24_andijon">Telegram</a>
-</div>
+  <main>
 
-<section>
-<h2>Бизнинг хизматлар</h2>
-<div class="services">
-<div class="service">🪑 Мебел йиғиш</div>
-<div class="service">🔧 Мебел таъмирлаш</div>
-<div class="service">⚡ Электрик</div>
-<div class="service">🚿 Сантехник</div>
-<div class="service">🚚 Юк ташиш</div>
-<div class="service">🏠 Уй кўчириш</div>
-<div class="service">🔥 Пайвандчи</div>
-<div class="service">🚪 Эшик-ром хизмати</div>
-</div>
-</section>
+    <div class="hero">
+      <h2>Sizga ishonchli usta kerakmi?</h2>
+      <p>
+        Tajribali ustalar. Tezkor xizmat.
+        Qulay buyurtma. USTA24 bilan ishingiz oson!
+      </p>
 
-<section>
-<h2>Бизнинг усталар</h2>
-<div class="masters" id="mastersList">
-<p class="loading">Усталар юкланмоқда...</p>
-</div>
-<p class="note">Фақат фаол усталар кўрсатилади.</p>
-</section>
+      <a class="btn" href="tel:+998770690003">📞 Qo‘ng‘iroq qilish</a>
+      <a class="btn" href="https://t.me/usta24_andijon"
+         target="_blank" rel="noopener noreferrer">Telegram</a>
+    </div>
 
-<section>
-<h2>Онлайн буюртма бериш</h2>
-<div class="order">
-<form id="orderForm">
+    <section>
+      <h2>Bizning xizmatlar</h2>
 
-<label>Исмингиз</label>
-<input name="name" type="text" placeholder="Исмингизни киритинг" required>
+      <div class="services">
+        <div class="service">🪑 Mebel yig‘ish</div>
+        <div class="service">🔧 Mebel ta’mirlash</div>
+        <div class="service">⚡ Elektrik</div>
+        <div class="service">🚿 Santexnik</div>
+        <div class="service">🚚 Yuk tashish</div>
+        <div class="service">🏠 Uy ko‘chirish</div>
+        <div class="service">🔥 Payvandchi</div>
+        <div class="service">🚪 Eshik-rom xizmati</div>
+      </div>
+    </section>
 
-<label>Телефон рақамингиз</label>
-<input name="phone" type="tel" placeholder="+998 __ ___ __ __" required>
+    <section>
+      <h2>Bizning ustalar</h2>
 
-<!-- TELEGRAM ULANISH -->
-<div class="telegram-box">
-<p><strong>📲 Buyurtma holatini Telegram orqali olish</strong></p>
+      <div class="masters" id="mastersList">
+        <p class="loading">Ustalar yuklanmoqda...</p>
+      </div>
 
-<a href="https://t.me/usta24_mijoz_bot"
-   target="_blank"
-   rel="noopener noreferrer"
-   class="btn">
-   Telegram botga ulanish
-</a>
+      <p class="note">
+        Faqat faol ustalar ko‘rsatiladi.
+      </p>
+    </section>
 
-<p class="note">
-Telegram botga kiring, START tugmasini bosing va
-telefon raqamingizni yuboring.
-</p>
-</div>
+    <section>
+      <h2>Onlayn buyurtma berish</h2>
 
-<label>Хизмат тури</label>
-<select name="service" required>
-<option value="">Хизматни танланг</option>
-<option>Мебел йиғиш</option>
-<option>Мебел таъмирлаш</option>
-<option>Электрик</option>
-<option>Сантехник</option>
-<option>Юк ташиш</option>
-<option>Уй кўчириш</option>
-<option>Пайвандчи</option>
-<option>Эшик-ром хизмати</option>
-</select>
+      <div class="order">
+        <form id="orderForm">
 
-<label>Манзилингиз</label>
-<input name="address" type="text" placeholder="Масалан: Андижон шаҳри..." required>
+          <label for="name">Ismingiz</label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            placeholder="Ismingizni kiriting"
+            maxlength="100"
+            autocomplete="name"
+            required
+          >
 
-<label>Қўшимча маълумот</label>
-<textarea name="details" placeholder="Қандай иш кераклигини ёзинг"></textarea>
+          <label for="phone">Telefon raqamingiz</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            placeholder="+998 __ ___ __ __"
+            maxlength="25"
+            autocomplete="tel"
+            required
+          >
 
-<button class="btn" type="submit">Буюртма юбориш</button>
-<p id="formMessage" class="note" aria-live="polite"></p>
+          <div class="telegram-box">
+            <p><strong>📲 Buyurtma holatini Telegram orqali oling</strong></p>
 
-</form>
-</div>
-</section>
+            <a
+              href="https://t.me/usta24_mijoz_bot"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn"
+            >
+              Telegram botga ulanish
+            </a>
 
-<section>
-<div class="contact">
-<h2>Биз билан боғланинг</h2>
-<p><strong>+998 77 069 00 03</strong></p>
-<a class="btn" href="tel:+998770690003">Қўнғироқ қилиш</a>
-<a class="btn" href="https://wa.me/998770690003">WhatsApp</a>
-<a class="btn" href="https://t.me/usta24_andijon">Telegram</a>
-</div>
-</section>
+            <p class="note">
+              Telegram botga kiring, START tugmasini bosing
+              va telefon raqamingizni yuboring.
+            </p>
+          </div>
 
-<footer>
-<p><strong>USTA 24 ANDIJON</strong></p>
-<p>© 2026 Барча ҳуқуқлар ҳимояланган</p>
-</footer>
+          <label for="service">Xizmat turi</label>
+          <select id="service" name="service" required>
+            <option value="">Xizmatni tanlang</option>
+            <option>Mebel yig‘ish</option>
+            <option>Mebel ta’mirlash</option>
+            <option>Elektrik</option>
+            <option>Santexnik</option>
+            <option>Yuk tashish</option>
+            <option>Uy ko‘chirish</option>
+            <option>Payvandchi</option>
+            <option>Eshik-rom xizmati</option>
+          </select>
 
-<script>
+          <label for="address">Manzilingiz</label>
+          <input
+            id="address"
+            name="address"
+            type="text"
+            placeholder="Masalan: Andijon shahri..."
+            maxlength="250"
+            autocomplete="street-address"
+            required
+          >
 
-// 1. ADMIN PANELDAN USTALARNI OLISH
+          <label for="details">Qo‘shimcha ma’lumot</label>
+          <textarea
+            id="details"
+            name="details"
+            placeholder="Qanday ish kerakligini yozing"
+            maxlength="2000"
+          ></textarea>
 
-async function loadMasters() {
-  const list = document.getElementById("mastersList");
+          <button class="btn" type="submit" id="submitButton">
+            Buyurtma yuborish
+          </button>
 
-  try {
-    const response = await fetch("/api/ustalar");
+          <p id="formMessage" class="note" role="status" aria-live="polite"></p>
 
-    if (!response.ok) {
-      throw new Error("Ustalarni yuklab bo'lmadi");
+        </form>
+      </div>
+    </section>
+
+    <section>
+      <div class="contact">
+        <h2>Biz bilan bog‘laning</h2>
+        <p><strong>+998 77 069 00 03</strong></p>
+
+        <a class="btn" href="tel:+998770690003">📞 Qo‘ng‘iroq qilish</a>
+
+        <a
+          class="btn"
+          href="https://wa.me/998770690003"
+          target="_blank"
+          rel="noopener noreferrer"
+        >WhatsApp</a>
+
+        <a
+          class="btn"
+          href="https://t.me/usta24_andijon"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Telegram</a>
+
+        <p class="note">
+          Andijon shahri bo‘ylab ustachilik xizmatlari.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p><strong>USTA24 ANDIJON</strong></p>
+    <p>© 2026 Barcha huquqlar himoyalangan</p>
+  </footer>
+
+  <script>
+    // API javobini xavfsiz JSON ko‘rinishida o‘qish
+    async function readJsonResponse(response) {
+      const text = await response.text();
+
+      try {
+        return text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error("Serverdan noto‘g‘ri javob keldi.");
+      }
     }
 
-    const data = await response.json();
-    list.innerHTML = "";
+    // 1. FAOL USTALARNI YUKLASH
+    async function loadMasters() {
+      const list = document.getElementById("mastersList");
 
-    if (!Array.isArray(data.ustalar) || data.ustalar.length === 0) {
-      list.innerHTML = "<p class='loading'>Hozircha faol ustalar yo'q.</p>";
-      return;
+      try {
+        const response = await fetch("/api/ustalar", {
+          method: "GET",
+          headers: {
+            "Accept": "application/json"
+          },
+          cache: "no-store"
+        });
+
+        const data = await readJsonResponse(response);
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || "Ustalarni yuklab bo‘lmadi.");
+        }
+
+        // API javobi {ustalar: [...]} yoki bevosita [...] bo‘lishi mumkin.
+        const masters = Array.isArray(data)
+          ? data
+          : (Array.isArray(data.ustalar) ? data.ustalar : []);
+
+        list.innerHTML = "";
+
+        if (masters.length === 0) {
+          list.innerHTML =
+            "<p class='loading'>Hozircha faol ustalar yo‘q.</p>";
+          return;
+        }
+
+        masters.forEach(usta => {
+          const card = document.createElement("div");
+          card.className = "master";
+
+          const avatar = document.createElement("div");
+          avatar.className = "avatar";
+          avatar.textContent = "👨‍🔧";
+
+          const name = document.createElement("h3");
+          name.textContent = usta.name || "Usta";
+
+          const specialty = document.createElement("p");
+          specialty.textContent =
+            usta.specialty || "Mutaxassisligi ko‘rsatilmagan";
+
+          card.append(avatar, name, specialty);
+
+          if (usta.phone) {
+            const phone = document.createElement("a");
+            phone.className = "btn";
+
+            const safePhone = String(usta.phone).replace(/[^\d+]/g, "");
+            phone.href = "tel:" + safePhone;
+            phone.textContent = "Bog‘lanish";
+
+            card.appendChild(phone);
+          }
+
+          list.appendChild(card);
+        });
+
+      } catch (error) {
+        console.error("Ustalar xatosi:", error);
+
+        list.innerHTML =
+          "<p class='loading'>Ustalarni yuklashda xatolik yuz berdi. Keyinroq qayta urinib ko‘ring.</p>";
+      }
     }
 
-    data.ustalar.forEach(usta => {
-      const card = document.createElement("div");
-      card.className = "master";
+    loadMasters();
 
-      const avatar = document.createElement("div");
-      avatar.className = "avatar";
-      avatar.textContent = "👨‍🔧";
 
-      const name = document.createElement("h3");
-      name.textContent = usta.name || "Usta";
+    // 2. BUYURTMA YUBORISH
+    const form = document.getElementById("orderForm");
+    const message = document.getElementById("formMessage");
+    const button = document.getElementById("submitButton");
 
-      const specialty = document.createElement("p");
-      specialty.textContent = usta.specialty || "Mutaxassisligi ko'rsatilmagan";
+    form.addEventListener("submit", async function(event) {
+      event.preventDefault();
 
-      const phone = document.createElement("a");
-      phone.className = "btn";
-      phone.href = "tel:" + String(usta.phone || "").replace(/[^\d+]/g, "");
-      phone.textContent = "Bog'lanish";
+      if (!form.reportValidity()) {
+        return;
+      }
 
-      card.append(avatar, name, specialty, phone);
-      list.appendChild(card);
+      // Takroriy yuborishni oldini olish
+      if (button.disabled) {
+        return;
+      }
+
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      button.disabled = true;
+      button.textContent = "Yuborilmoqda...";
+      message.textContent = "Buyurtmangiz yuborilmoqda...";
+
+      try {
+        const response = await fetch("/api/order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify(data)
+        });
+
+        const result = await readJsonResponse(response);
+
+        if (!response.ok || result.success !== true) {
+          throw new Error(
+            result.message ||
+            result.error ||
+            "Buyurtmani yuborishda server xatosi yuz berdi."
+          );
+        }
+
+        const telegramSent =
+          result.telegramSent === true ||
+          result.telegram_sent === true;
+
+        if (telegramSent) {
+          message.textContent =
+            "✅ Buyurtmangiz qabul qilindi va Telegram'ga yuborildi!";
+        } else {
+          message.textContent =
+            "✅ Buyurtmangiz qabul qilindi. Telegram xabari yuborilmadi; administrator bilan bog‘lanishingiz mumkin.";
+        }
+
+        form.reset();
+
+      } catch (error) {
+        console.error("Buyurtma xatosi:", error);
+
+        message.textContent =
+          "❌ Buyurtma yuborishda xatolik: " + error.message;
+
+      } finally {
+        button.disabled = false;
+        button.textContent = "Buyurtma yuborish";
+      }
     });
-
-  } catch (error) {
-    console.error("Ustalar xatosi:", error);
-    list.innerHTML = "<p class='loading'>Ustalarni yuklashda xatolik yuz berdi.</p>";
-  }
-}
-
-loadMasters();
-
-
-// 2. BUYURTMA YUBORISH
-
-const form = document.getElementById("orderForm");
-
-form.addEventListener("submit", async function(event) {
-  event.preventDefault();
-
-  const message = document.getElementById("formMessage");
-  const button = form.querySelector("button[type='submit']");
-  const data = Object.fromEntries(new FormData(form).entries());
-
-  message.textContent = "Буюртма юборилмоқда...";
-  button.disabled = true;
-
-  try {
-    const response = await fetch("/api/order", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(data)
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.message || result.error || "Сервер хатоси");
-    }
-
-    if (result.telegramSent) {
-      message.textContent = "Буюртмангиз қабул қилинди ва Telegram'га юборилди!";
-    } else {
-      message.textContent = "Буюртмангиз сақланди, лекин Telegram хабарини юбориб бўлмади. Администратор билан боғланинг.";
-    }
-
-    form.reset();
-
-  } catch (error) {
-    console.error("Buyurtma xatosi:", error);
-    message.textContent = "Буюртма юборишда хатолик: " + error.message;
-  } finally {
-    button.disabled = false;
-  }
-});
-
-</script>
+  </script>
 
 </body>
 </html>
