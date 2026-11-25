@@ -62,17 +62,7 @@ export default {
       } catch (e) { console.error("Customer lookup error", e); return false; }
     };
     const notifyAdmin = (text) => adminTG(env.USTA24_CHAT_ID || env.TELEGRAM_CHAT_ID, text);
-    // Yangi buyurtmalar faqat faol ustalarning shaxsiy Telegram chatlariga yuboriladi.
-    // Admin/uy-servis guruhiga yangi buyurtma nusxasi yuborilmaydi.
-    const notifyWorkers = async (text) => {
-      if (!env.DB) return 0;
-      try {
-        const r = await env.DB.prepare("SELECT telegram_chat_id FROM ustalar WHERE status='Faol' AND telegram_chat_id IS NOT NULL AND telegram_chat_id != ''").all();
-        const ids = [...new Set((r.results || []).map(x => String(x.telegram_chat_id)))];
-        const results = await Promise.all(ids.map(id => workerTG(id, text)));
-        return results.filter(Boolean).length;
-      } catch (e) { console.error("Worker notification error", e); return 0; }
-    };
+    // Ustalarga umumiy tarqatma yo'q: faqat admin va aniq biriktirilgan ustaga xabar yuboriladi.
     const getOrder = id => env.DB.prepare("SELECT * FROM orders WHERE id = ? LIMIT 1").bind(id).first();
 
     // A completed order must have a price. UNIQUE(order_id) prevents duplicate commission rows.
@@ -218,9 +208,9 @@ export default {
           VALUES (?, ?, ?, ?, ?, 'Yangi', datetime('now'), 'Veb-sayt')`).bind(name, uzPhone, service, address, details).run();
         const id = saved.meta?.last_row_id;
         await ensureCustomer(name, uzPhone, address);
-        const tg = await notifyWorkers(`🆕 USTA24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${uzPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi\n\nBuyurtmani admin paneldan ustaga biriktirish mumkin.`);
+        const adminNotified = await notifyAdmin(`🆕 USTA24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${uzPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi`);
         const customerNotified = await notifyCustomer(uzPhone, `✅ USTA 24 — BUYURTMANGIZ QABUL QILINDI\n🆔 #${id}\n🔧 ${service}\n📌 Yangi`);
-        return json({ success: true, message: "Buyurtma saqlandi", orderId: id, telegramSent: tg > 0, workersNotified: tg, customerNotified });
+        return json({ success: true, message: "Buyurtma saqlandi", orderId: id, adminNotified, customerNotified });
       }
 
       if (path === "/api/public-settings" && method === "GET") {
@@ -349,8 +339,11 @@ export default {
         }
         const d = await body();
         if (!d) return json({success:false,error:"Ma'lumot noto'g'ri"},400);
+        const existingFinance = await env.DB.prepare("SELECT * FROM order_finances WHERE order_id=?").bind(id).first();
+        if (existingFinance?.payment_status === "To'landi") return json({success:false,error:"Komissiya to'langan. Buyurtma yopilgan va endi tahrirlanmaydi."},409);
         // Assign a worker
         if (d.worker_name !== undefined || d.worker_phone !== undefined) {
+          if (order.status === "Tugallandi") return json({success:false,error:"Tugallangan buyurtma yopilgan. Ustani qayta biriktirib bo'lmaydi."},409);
           const wn = str(d.worker_name,150), wp = str(d.worker_phone,40);
           const w = await env.DB.prepare("SELECT id,name,phone,telegram_chat_id FROM ustalar WHERE name=? AND phone=? AND status='Faol' LIMIT 1").bind(wn,wp).first();
           if (!w) return json({success:false,error:"Faol usta topilmadi"},404);
@@ -381,6 +374,7 @@ export default {
         if (d.status !== undefined) {
           const allowed = ["Yangi","Qabul qilindi","Ustaga biriktirildi","Bajarilmoqda","Tugallandi","Bekor qilindi"];
           if (!allowed.includes(d.status)) return json({success:false,error:"Buyurtma holati noto'g'ri"},400);
+          if (order.status === "Tugallandi" && d.status !== "Tugallandi") return json({success:false,error:"Tugallangan buyurtma yopilgan. Holatini qayta ochib bo'lmaydi."},409);
           if (d.status === "Tugallandi") {
             // Komissiya faqat yangi yakunlanayotgan buyurtmaga hisoblanadi.
             // Avvaldan Tugallandi bo'lgan eski buyurtmalarga keyin narx kiritilishi
@@ -394,6 +388,7 @@ export default {
             const done = await completeOrder(id);
             if (!done.ok) return json({success:false,error:done.error},400);
             await notifyCustomer(order.phone,`✅ USTA 24 — BUYURTMANGIZ TUGALLANDI\nBuyurtma #${id}\nXizmat: ${order.service}`);
+            await notifyAdmin(`🏁 BUYURTMA TUGALLANDI\n🆔 #${id}\n👤 ${order.name}\n🔧 ${order.service}\n💰 Komissiya: ${done.commission.toLocaleString("uz-UZ")} so'm`);
             return json({success:true,message:"Buyurtma tugallandi, komissiya hisoblandi",commission:done.commission});
           }
           updates.push(["status",d.status]);
@@ -410,6 +405,7 @@ export default {
           if (fresh.status === "Tugallandi" && order.status !== "Tugallandi" && !f && num(d.price) > 0) await completeOrder(id);
         }
         if (d.status !== undefined) await notifyCustomer(fresh.phone,`📢 USTA 24 — BUYURTMANGIZ HOLATI\nBuyurtma #${id}\nHolat: ${fresh.status}`);
+        await notifyAdmin(`✏️ BUYURTMA YANGILANDI\n🆔 #${id}\n👤 ${fresh.name}\n🔧 ${fresh.service}\n📌 ${fresh.status}`);
         return json({success:true,message:"Buyurtma yangilandi",order:await getOrder(id)});
       }
 
@@ -486,11 +482,13 @@ export default {
       m=path.match(/^\/api\/admin\/finance\/commissions\/(\d+)$/);
       if(m && method==="PATCH"){
         const id=Number(m[1]), d=await body(), status=str(d?.payment_status);
-        if(!["Kutilmoqda","To'landi"].includes(status)) return json({success:false,error:"To'lov holati noto'g'ri"},400);
+        if(status!=="To'landi") return json({success:false,error:"Komissiya to'lovi qaytarib bekor qilinmaydi."},400);
         const f=await env.DB.prepare("SELECT * FROM order_finances WHERE order_id=?").bind(id).first();
         if(!f) return json({success:false,error:"Komissiya topilmadi"},404);
-        await env.DB.prepare("UPDATE order_finances SET payment_status=?,payment_method='Naqd',paid_at=? WHERE order_id=?").bind(status,status==="To'landi"?new Date().toISOString():null,id).run();
-        return json({success:true,message:"To'lov holati yangilandi"});
+        if(f.payment_status==="To'landi") return json({success:false,error:"Komissiya avval to'langan. Buyurtma yopiq."},409);
+        await env.DB.prepare("UPDATE order_finances SET payment_status='To''landi',payment_method='Naqd',paid_at=? WHERE order_id=? AND payment_status='Kutilmoqda'").bind(new Date().toISOString(),id).run();
+        await notifyAdmin(`💵 KOMISSIYA TO'LANDI\n🆔 Buyurtma #${id}\n💰 ${num(f.commission_amount).toLocaleString("uz-UZ")} so'm\n🔒 Buyurtma tahrirlash uchun yopildi.`);
+        return json({success:true,message:"Komissiya to'landi. Buyurtma yopildi."});
       }
       if(path==="/api/admin/expenses" && method==="GET"){const r=await env.DB.prepare("SELECT * FROM expenses ORDER BY expense_date DESC,id DESC").all();return json({success:true,expenses:r.results||[]});}
       if(path==="/api/admin/expenses" && method==="POST"){
