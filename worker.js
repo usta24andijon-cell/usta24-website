@@ -611,7 +611,7 @@ export default {
         ).run();
 
         const id = saved.meta?.last_row_id;
-
+        await notifyLive("order_created", id);
         await ensureCustomer(name, rawPhone, address);
 
         const tg = await notifyAdmin(
