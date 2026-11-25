@@ -945,7 +945,7 @@ export default {
           await notifyAdmin(
             `👷 Buyurtma #${id} ${w.name} ustaga biriktirildi.`
           );
-
+          await notifyLive("order_updated", id);
           return json({
             success: true,
             message: "Usta biriktirildi",
