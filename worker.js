@@ -1,3 +1,18 @@
+// Durable Object class is retained because the production namespace was created
+// with the v1 SQLite migration. The website does not currently depend on live events.
+export class Usta24LiveHub {
+  constructor(state, env) { this.state = state; this.env = env; }
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
+      return new Response(JSON.stringify({ success: true, service: "USTA24 Live Hub" }), {
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }
+      });
+    }
+    return new Response("USTA24 Live Hub is ready", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
