@@ -21,48 +21,34 @@ button{cursor:pointer}
 .layout{display:flex;min-height:100vh}
 .sidebar{width:250px;background:var(--dark);color:white;
  position:fixed;inset:0 auto 0 0;padding:22px 15px;overflow:auto;z-index:5}
-.brand{font-size:23px;font-weight:900;letter-spacing:1px;
- padding:8px 12px 25px}
+.brand{font-size:23px;font-weight:900;letter-spacing:1px;padding:8px 12px 25px}
 .brand span{color:#6d91ff}
-.brand small{display:block;font-size:10px;color:#8996aa;
- font-weight:500;letter-spacing:2px;margin-top:5px}
-.nav-label{font-size:10px;color:#8290a5;padding:14px 12px 8px;
- text-transform:uppercase;letter-spacing:1.5px}
-.nav button{width:100%;border:0;background:transparent;color:#c3ccda;
- padding:12px;border-radius:10px;text-align:left;margin:2px 0;
- display:flex;gap:12px;align-items:center;font-weight:600}
+.brand small{display:block;font-size:10px;color:#8996aa;font-weight:500;letter-spacing:2px;margin-top:5px}
+.nav-label{font-size:10px;color:#8290a5;padding:14px 12px 8px;text-transform:uppercase;letter-spacing:1.5px}
+.nav button{width:100%;border:0;background:transparent;color:#c3ccda;padding:12px;border-radius:10px;text-align:left;margin:2px 0;display:flex;gap:12px;align-items:center;font-weight:600}
 .nav button:hover,.nav button.active{background:#263752;color:white}
 .nav button.active{box-shadow:inset 3px 0 #6c91ff}
 .side-bottom{border-top:1px solid #2b3545;margin-top:25px;padding-top:15px}
 .main{margin-left:250px;width:calc(100% - 250px);min-width:0}
-.topbar{height:72px;background:#fff;border-bottom:1px solid var(--line);
- display:flex;align-items:center;justify-content:space-between;
- padding:0 30px;position:sticky;top:0;z-index:3}
+.topbar{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 30px;position:sticky;top:0;z-index:3}
 .top-title{font-size:18px;font-weight:800}
 .top-right{display:flex;align-items:center;gap:12px;color:var(--muted)}
-.avatar{width:36px;height:36px;border-radius:12px;background:#e9efff;
- color:var(--blue);display:grid;place-items:center;font-weight:900}
+.avatar{width:36px;height:36px;border-radius:12px;background:#e9efff;color:var(--blue);display:grid;place-items:center;font-weight:900}
 .content{padding:28px;max-width:1500px;margin:auto}
-.page-head{display:flex;align-items:center;justify-content:space-between;
- gap:15px;margin-bottom:22px;flex-wrap:wrap}
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:22px;flex-wrap:wrap}
 .page-head h1{font-size:24px;margin:0 0 5px}
 .sub{color:var(--muted);font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-.stat,.panel{background:var(--panel);border:1px solid var(--line);
- border-radius:var(--radius);box-shadow:var(--shadow)}
+.stat,.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .stat{padding:20px}
-.stat-top{display:flex;justify-content:space-between;align-items:center;
- color:var(--muted);font-weight:600}
-.stat-icon{width:38px;height:38px;border-radius:12px;
- display:grid;place-items:center;background:#edf2ff;font-size:18px}
+.stat-top{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-weight:600}
+.stat-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:#edf2ff;font-size:18px}
 .stat strong{display:block;font-size:27px;margin:15px 0 4px}
 .stat small{color:var(--muted)}
 .panel{padding:20px;margin-bottom:18px;min-width:0}
-.panel-head{display:flex;align-items:center;justify-content:space-between;
- gap:12px;margin-bottom:17px;flex-wrap:wrap}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px;flex-wrap:wrap}
 .panel h2{font-size:17px;margin:0}
-.btn{border:0;border-radius:9px;padding:10px 15px;
- font-weight:700;display:inline-flex;align-items:center;gap:7px}
+.btn{border:0;border-radius:9px;padding:10px 15px;font-weight:700;display:inline-flex;align-items:center;gap:7px}
 .primary{background:var(--blue);color:white}
 .secondary{background:#eef2f8;color:#34415a}
 .success{background:#e6f7ef;color:#087c50}
@@ -71,11 +57,8 @@ button{cursor:pointer}
 .btn:hover{filter:brightness(.97)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .actions{display:flex;gap:6px;flex-wrap:wrap}
-input,select,textarea{width:100%;border:1px solid #dfe4ed;
- border-radius:9px;padding:11px 12px;background:#fff;color:var(--text);
- outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--blue);
- box-shadow:0 0 0 3px #3768f51a}
+input,select,textarea{width:100%;border:1px solid #dfe4ed;border-radius:9px;padding:11px 12px;background:#fff;color:var(--text);outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px #3768f51a}
 textarea{resize:vertical;min-height:80px}
 .field{margin-bottom:14px}
 .field label{display:block;font-weight:700;margin-bottom:7px;font-size:12px}
@@ -83,46 +66,36 @@ textarea{resize:vertical;min-height:80px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .table-wrap{width:100%;overflow:auto}
 table{width:100%;border-collapse:collapse;white-space:nowrap}
-th{text-align:left;font-size:11px;color:var(--muted);font-weight:800;
- text-transform:uppercase;letter-spacing:.5px;background:#f8f9fc}
+th{text-align:left;font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.5px;background:#f8f9fc}
 td,th{padding:13px 12px;border-bottom:1px solid var(--line)}
 td{font-size:13px}
 tr:last-child td{border-bottom:0}
-.tag{display:inline-block;padding:5px 9px;border-radius:20px;
- background:#eef2f8;color:#566178;font-size:11px;font-weight:800}
+.tag{display:inline-block;padding:5px 9px;border-radius:20px;background:#eef2f8;color:#566178;font-size:11px;font-weight:800}
 .tag.green{background:#e4f7ed;color:#128256}
 .tag.orange{background:#fff3df;color:#a76b13}
 .tag.red{background:#ffeded;color:#c33e49}
 .tag.blue{background:#eaf0ff;color:#345ce0}
 .empty{text-align:center;color:var(--muted);padding:35px}
 .two-col{display:grid;grid-template-columns:1.3fr 1fr;gap:17px}
-.login-screen{min-height:100vh;display:grid;place-items:center;
- background:linear-gradient(135deg,#101827,#1e355a);padding:20px}
-.login-card{width:min(420px,100%);background:white;border-radius:20px;
- padding:32px;box-shadow:0 20px 70px #0004}
+.login-screen{min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#101827,#1e355a);padding:20px}
+.login-card{width:min(420px,100%);background:white;border-radius:20px;padding:32px;box-shadow:0 20px 70px #0004}
 .login-logo{font-size:30px;font-weight:900;margin-bottom:8px}
 .login-logo span{color:var(--blue)}
 .login-card h2{margin:20px 0 6px}
 .login-card p{color:var(--muted);margin-bottom:22px}
 .login-card .btn{width:100%;justify-content:center;padding:13px}
-.modal-bg{position:fixed;inset:0;background:#11182799;z-index:20;
- display:none;align-items:center;justify-content:center;padding:16px}
+.modal-bg{position:fixed;inset:0;background:#11182799;z-index:20;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-bg.show{display:flex}
-.modal{width:min(650px,100%);max-height:92vh;overflow:auto;
- background:white;border-radius:17px;padding:23px;box-shadow:0 20px 70px #0004}
-.modal-head{display:flex;justify-content:space-between;align-items:center;
- margin-bottom:20px}
+.modal{width:min(650px,100%);max-height:92vh;overflow:auto;background:white;border-radius:17px;padding:23px;box-shadow:0 20px 70px #0004}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
 .modal-head h2{margin:0;font-size:19px}
 .close{border:0;background:#f0f2f6;border-radius:9px;width:34px;height:34px}
 .modal-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
-.toast{position:fixed;right:20px;bottom:20px;background:#172033;color:white;
- padding:13px 18px;border-radius:10px;z-index:50;display:none;
- box-shadow:var(--shadow);max-width:90vw}
+.toast{position:fixed;right:20px;bottom:20px;background:#172033;color:white;padding:13px 18px;border-radius:10px;z-index:50;display:none;box-shadow:var(--shadow);max-width:90vw}
 .toast.show{display:block}
 .mobile-menu{display:none}
 .muted{color:var(--muted)}
-.worker-hint{background:#edf7ff;border:1px solid #d8eaff;
- border-radius:10px;padding:12px;color:#315a8d;margin:8px 0 15px}
+.worker-hint{background:#edf7ff;border:1px solid #d8eaff;border-radius:10px;padding:12px;color:#315a8d;margin:8px 0 15px}
 @media(max-width:1000px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:700px){
  .sidebar{transform:translateX(-100%);transition:.2s}
@@ -178,8 +151,7 @@ tr:last-child td{border-bottom:0}
    <button data-page="settings">⚙ Sozlamalar</button>
   </div>
   <div class="side-bottom">
-   <button class="btn danger" style="width:100%;justify-content:center"
-    onclick="logout()">Chiqish</button>
+   <button class="btn danger" style="width:100%;justify-content:center" onclick="logout()">Chiqish</button>
   </div>
  </aside>
 
@@ -211,6 +183,12 @@ let token=sessionStorage.getItem("usta24_admin_token")||"";
 let currentPage="dashboard";
 let cachedWorkers=[];
 
+// BUYURTMALARNI AVTOMATIK TEKSHIRISH
+let liveTimer=null;
+let lastOrdersSnapshot="";
+let lastStatsSnapshot="";
+let liveCheckRunning=false;
+
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({
  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -229,11 +207,16 @@ function showModal(title,body,buttons){
  $("modalFoot").innerHTML=buttons||'<button class="btn secondary" onclick="closeModal()">Yopish</button>';
  $("modalBg").classList.add("show");
 }
-function closeModal(){$("modalBg").classList.remove("show")}
+function closeModal(){
+ $("modalBg").classList.remove("show");
+}
 function toggleMenu(){$("sidebar").classList.toggle("open")}
 function logout(){
+ stopLiveUpdates();
  sessionStorage.removeItem("usta24_admin_token");
- token="";$("app").style.display="none";$("login").style.display="grid";
+ token="";
+ $("app").style.display="none";
+ $("login").style.display="grid";
  $("password").value="";
 }
 async function api(path,method="GET",data){
@@ -255,6 +238,59 @@ async function loadWorkers(){
  cachedWorkers=d.ustalar||[];
  return cachedWorkers;
 }
+
+// AVTOMATIK YANGILANISH
+async function checkLiveUpdates(){
+ if(!token || $("app").style.display==="none" || liveCheckRunning) return;
+ if($("modalBg").classList.contains("show")) return;
+
+ liveCheckRunning=true;
+ try{
+  const d=await api("/orders");
+  const list=d.orders||[];
+
+  const snapshot=JSON.stringify(list.map(o=>[
+   o.id,o.status,o.worker_name,o.worker_phone,
+   o.price,o.finance_price,o.name,o.phone,o.service,o.address
+  ]));
+
+  if(lastOrdersSnapshot && snapshot!==lastOrdersSnapshot){
+   if(currentPage==="orders"){
+    await orders();
+    toast("Buyurtmalar yangilandi");
+   }
+  }
+  lastOrdersSnapshot=snapshot;
+
+  if(currentPage==="dashboard"){
+   const statsData=await api("/stats");
+   const statsSnapshot=JSON.stringify(statsData.stats||{});
+
+   if(lastStatsSnapshot && statsSnapshot!==lastStatsSnapshot){
+    await dashboard();
+   }
+   lastStatsSnapshot=statsSnapshot;
+  }
+ }catch(error){
+  console.error("Avtomatik yangilash xatosi:",error);
+ }finally{
+  liveCheckRunning=false;
+ }
+}
+function startLiveUpdates(){
+ stopLiveUpdates();
+ lastOrdersSnapshot="";
+ lastStatsSnapshot="";
+ checkLiveUpdates();
+ liveTimer=setInterval(checkLiveUpdates,2500);
+}
+function stopLiveUpdates(){
+ if(liveTimer){
+  clearInterval(liveTimer);
+  liveTimer=null;
+ }
+}
+
 $("loginForm").addEventListener("submit",async e=>{
  e.preventDefault();
  const p=$("password").value;
@@ -263,10 +299,13 @@ $("loginForm").addEventListener("submit",async e=>{
  try{
   await api("/stats");
   sessionStorage.setItem("usta24_admin_token",token);
-  $("login").style.display="none";$("app").style.display="flex";
-  openPage("dashboard");
+  $("login").style.display="none";
+  $("app").style.display="flex";
+  await openPage("dashboard");
+  startLiveUpdates();
  }catch(err){
-  token="";$("loginError").textContent=err.message||"Parol noto‘g‘ri";
+  token="";
+  $("loginError").textContent=err.message||"Parol noto‘g‘ri";
  }
 });
 
@@ -389,7 +428,7 @@ async function saveNewOrder(){
   });
   const id=d.id||d.orderId;
   if(price>0&&id)await api("/orders/"+id,"PATCH",{price});
-  closeModal();toast("Buyurtma saqlandi");orders();
+  closeModal();toast("Buyurtma saqlandi");await orders();
  }catch(e){toast(e.message)}
 }
 async function editOrder(id){
@@ -439,62 +478,35 @@ function workerSelected(){
   $("workerInfo").textContent="Usta tanlanmagan. Faol ustalardan birini tanlang.";
  }
 }
-
 async function saveOrder(id){
  try{
-  const price = Number($("editPrice").value);
-  let status = $("editStatus").value;
-
-  if(!Number.isFinite(price) || price < 0)
-   throw new Error("Narxni to‘g‘ri kiriting");
-
-  const workerId = Number($("editWorker").value);
-  const selected = cachedWorkers.find(w => Number(w.id) === workerId);
-
-  // Usta tanlangan, lekin holat Yangi bo‘lsa,
-  // avtomatik Ustaga biriktirildi qilamiz.
-  if(selected && status === "Yangi"){
-   status = "Ustaga biriktirildi";
-  }
-
-  if(status === "Tugallandi" && price <= 0)
-   throw new Error("Ishni tugatish uchun narx kiriting");
-
-  // 1. Ustani alohida biriktirish
+  const price=Number($("editPrice").value);
+  let status=$("editStatus").value;
+  if(!Number.isFinite(price)||price<0)throw new Error("Narxni to‘g‘ri kiriting");
+  const workerId=Number($("editWorker").value);
+  const selected=cachedWorkers.find(w=>Number(w.id)===workerId);
+  if(selected&&status==="Yangi")status="Ustaga biriktirildi";
+  if(status==="Tugallandi"&&price<=0)throw new Error("Ishni tugatish uchun narx kiriting");
   if(selected){
-   await api("/orders/"+id,"PATCH",{
-    worker_name:selected.name,
-    worker_phone:selected.phone
-   });
+   await api("/orders/"+id,"PATCH",{worker_name:selected.name,worker_phone:selected.phone});
   }
-
-  // 2. Buyurtma ma'lumotlari, narx va holat
   await api("/orders/"+id,"PATCH",{
    name:$("editName").value.trim(),
    phone:$("editPhone").value.trim(),
    service:$("editService").value.trim(),
    address:$("editAddress").value.trim(),
    details:$("editDetails").value,
-   price:price,
-   status:status
+   price,status
   });
-
   closeModal();
-  toast(status==="Tugallandi"
-   ? "Buyurtma tugallandi, komissiya hisoblandi"
-   : "Buyurtma va narx saqlandi");
-
+  toast(status==="Tugallandi"?"Buyurtma tugallandi, komissiya hisoblandi":"Buyurtma va narx saqlandi");
   await orders();
-
- }catch(e){
-  toast(e.message);
- }
+ }catch(e){toast(e.message)}
 }
-
 
 // WORKERS
 async function workers(){
- const d=await loadWorkers();
+ await loadWorkers();
  const rows=cachedWorkers.map(w=>
  '<tr><td><b>'+esc(w.name)+'</b></td><td>'+esc(w.phone)+'</td>'+
  '<td>'+esc(w.specialty)+'</td><td>'+tag(w.status)+'</td>'+
@@ -506,15 +518,13 @@ async function workers(){
 }
 async function addWorker(){
  showModal("Yangi usta",field("Usta ismi","wName")+
- field("Telefon raqami","wPhone")+
- field("Mutaxassisligi","wSpecialty"),
+ field("Telefon raqami","wPhone")+field("Mutaxassisligi","wSpecialty"),
  '<button class="btn secondary" onclick="closeModal()">Bekor qilish</button>'+
  '<button class="btn primary" onclick="saveWorker()">Saqlash</button>');
 }
 async function saveWorker(id){
  try{
-  const data={name:$("wName").value.trim(),phone:$("wPhone").value.trim(),
-   specialty:$("wSpecialty").value.trim(),status:"Faol"};
+  const data={name:$("wName").value.trim(),phone:$("wPhone").value.trim(),specialty:$("wSpecialty").value.trim(),status:"Faol"};
   if(!data.name||!data.phone)throw new Error("Ism va telefonni kiriting");
   await api("/ustalar"+(id?"/"+id:""),id?"PATCH":"POST",data);
   closeModal();toast("Usta saqlandi");workers();
@@ -536,10 +546,7 @@ async function editWorker(id){
 }
 async function updateWorker(id){
  try{
-  await api("/ustalar/"+id,"PATCH",{
-   name:$("wName").value.trim(),phone:$("wPhone").value.trim(),
-   specialty:$("wSpecialty").value.trim(),status:$("wStatus").value
-  });
+  await api("/ustalar/"+id,"PATCH",{name:$("wName").value.trim(),phone:$("wPhone").value.trim(),specialty:$("wSpecialty").value.trim(),status:$("wStatus").value});
   closeModal();toast("Usta yangilandi");workers();
  }catch(e){toast(e.message)}
 }
@@ -586,9 +593,7 @@ async function addService(){
 }
 async function saveService(id){
  try{
-  await api("/services"+(id?"/"+id:""),id?"PATCH":"POST",{
-   name:$("sName").value.trim(),description:$("sDesc").value.trim(),status:"Faol"
-  });
+  await api("/services"+(id?"/"+id:""),id?"PATCH":"POST",{name:$("sName").value.trim(),description:$("sDesc").value.trim(),status:"Faol"});
   closeModal();toast("Xizmat saqlandi");services();
  }catch(e){toast(e.message)}
 }
@@ -646,23 +651,16 @@ async function expenses(){
  '<div class="panel">'+table(["Nomi","Kategoriya","Summa","Sana","Izoh"],rows)+'</div>';
 }
 async function addExpense(){
- showModal("Xarajat qo‘shish",
- field("Xarajat nomi","eTitle")+
- field("Kategoriya","eCategory")+
- field("Summa (so‘m)","eAmount","number")+
- field("Sana","eDate","date")+
- '<div class="field"><label>Izoh</label><textarea id="eNotes"></textarea></div>',
+ showModal("Xarajat qo‘shish",field("Xarajat nomi","eTitle")+
+ field("Kategoriya","eCategory")+field("Summa (so‘m)","eAmount","number")+
+ field("Sana","eDate","date")+'<div class="field"><label>Izoh</label><textarea id="eNotes"></textarea></div>',
  '<button class="btn secondary" onclick="closeModal()">Bekor qilish</button>'+
  '<button class="btn primary" onclick="saveExpense()">Saqlash</button>');
  $("eDate").value=new Date().toISOString().slice(0,10);
 }
 async function saveExpense(){
  try{
-  await api("/expenses","POST",{
-   title:$("eTitle").value,category:$("eCategory").value,
-   amount:Number($("eAmount").value),expense_date:$("eDate").value,
-   notes:$("eNotes").value
-  });
+  await api("/expenses","POST",{title:$("eTitle").value,category:$("eCategory").value,amount:Number($("eAmount").value),expense_date:$("eDate").value,notes:$("eNotes").value});
   closeModal();toast("Xarajat saqlandi");expenses();
  }catch(e){toast(e.message)}
 }
@@ -690,8 +688,7 @@ async function addReview(){
 }
 async function saveReview(){
  try{
-  await api("/reviews","POST",{customer_name:$("rName").value,phone:$("rPhone").value,
-   rating:Number($("rRating").value),comment:$("rComment").value});
+  await api("/reviews","POST",{customer_name:$("rName").value,phone:$("rPhone").value,rating:Number($("rRating").value),comment:$("rComment").value});
   closeModal();toast("Sharh saqlandi");reviews();
  }catch(e){toast(e.message)}
 }
@@ -715,12 +712,9 @@ async function ads(){
 async function addAd(){
  showModal("Reklama kampaniyasi",
  '<div class="field"><label>Platforma</label><select id="aPlatform"><option>Instagram</option><option>Facebook</option><option>Google</option><option>Boshqa</option></select></div>'+
- field("Kampaniya nomi","aName")+
- field("Xarajat (so‘m)","aSpend","number")+
- field("Ko‘rishlar","aImpressions","number")+
- field("Bosishlar","aClicks","number")+
- field("Murojaatlar","aLeads","number")+
- field("Sana","aDate","date")+
+ field("Kampaniya nomi","aName")+field("Xarajat (so‘m)","aSpend","number")+
+ field("Ko‘rishlar","aImpressions","number")+field("Bosishlar","aClicks","number")+
+ field("Murojaatlar","aLeads","number")+field("Sana","aDate","date")+
  '<div class="field"><label>Izoh</label><textarea id="aNotes"></textarea></div>',
  '<button class="btn secondary" onclick="closeModal()">Bekor qilish</button>'+
  '<button class="btn primary" onclick="saveAd()">Saqlash</button>');
@@ -728,12 +722,7 @@ async function addAd(){
 }
 async function saveAd(){
  try{
-  await api("/ads","POST",{
-   platform:$("aPlatform").value,campaign_name:$("aName").value,
-   spend:Number($("aSpend").value),impressions:Number($("aImpressions").value),
-   clicks:Number($("aClicks").value),leads:Number($("aLeads").value),
-   campaign_date:$("aDate").value,notes:$("aNotes").value
-  });
+  await api("/ads","POST",{platform:$("aPlatform").value,campaign_name:$("aName").value,spend:Number($("aSpend").value),impressions:Number($("aImpressions").value),clicks:Number($("aClicks").value),leads:Number($("aLeads").value),campaign_date:$("aDate").value,notes:$("aNotes").value});
   closeModal();toast("Kampaniya saqlandi");ads();
  }catch(e){toast(e.message)}
 }
@@ -762,13 +751,16 @@ async function saveSettings(){
  }catch(e){toast(e.message)}
 }
 
-// Existing login session
+// OLDINDAN SAQLANGAN ADMIN SESSIYASI
 if(token){
- api("/stats").then(()=>{
-  $("login").style.display="none";$("app").style.display="flex";
-  openPage("dashboard");
+ api("/stats").then(async()=>{
+  $("login").style.display="none";
+  $("app").style.display="flex";
+  await openPage("dashboard");
+  startLiveUpdates();
  }).catch(()=>{
-  sessionStorage.removeItem("usta24_admin_token");token="";
+  sessionStorage.removeItem("usta24_admin_token");
+  token="";
  });
 }
 </script>
