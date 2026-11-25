@@ -1,759 +1,450 @@
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    const method = request.method;
-
-    const json = (data, status = 200) => new Response(JSON.stringify(data), {
-      status,
-      headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }
-    });
-    const body = async () => { try { return await request.json(); } catch { return null; } };
-    const adminOK = () => {
-      const h = request.headers.get("Authorization") || "";
-      return Boolean(env.ADMIN_PASSWORD && h.startsWith("Bearer ") && h.slice(7) === env.ADMIN_PASSWORD);
-    };
-    const str = (v, max = 1000) => String(v ?? "").trim().slice(0, max);
-    const phone = v => {
-      let d = String(v || "").replace(/\D/g, "");
-      if (d.startsWith("00")) d = d.slice(2);
-      if (d.length === 9) d = "998" + d;
-      return d;
-    };
-    const num = (v, fallback = 0) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? Math.round(n) : fallback;
-    };
-    const sendTG = async (token, chatId, text, extra = {}) => {
-      if (!token || !chatId) return false;
-      try {
-        const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, text, ...extra })
-        });
-        const j = await r.json();
-        return Boolean(r.ok && j.ok);
-      } catch (e) { console.error("Telegram send error", e); return false; }
-    };
-    const adminTG = (chatId, text, extra) => sendTG(env.TELEGRAM_BOT_TOKEN, chatId, text, extra);
-    const customerTG = (chatId, text, extra) => sendTG(env.CUSTOMER_BOT_TOKEN, chatId, text, extra);
-    const workerTG = (chatId, text, extra) => sendTG(env.WORKER_BOT_TOKEN, chatId, text, extra);
-    const notifyCustomer = async (rawPhone, text) => {
-      const p = phone(rawPhone);
-      if (!p || !env.DB) return false;
-      try {
-        const c = await env.DB.prepare("SELECT chat_id FROM customer_telegram WHERE phone = ? LIMIT 1").bind(p).first();
-        return c?.chat_id ? customerTG(c.chat_id, text) : false;
-      } catch (e) { console.error("Customer lookup error", e); return false; }
-    };
-    const notifyAdmin = (text) => adminTG(env.USTA24_CHAT_ID || env.TELEGRAM_CHAT_ID, text);
-    const getOrder = id => env.DB.prepare("SELECT * FROM orders WHERE id = ? LIMIT 1").bind(id).first();
-
-    // A completed order must have a price. UNIQUE(order_id) prevents duplicate commission rows.
-    const completeOrder = async (id) => {
-      const order = await getOrder(id);
-      if (!order) return { ok: false, error: "Buyurtma topilmadi" };
-      const price = num(order.price, 0);
-      if (price <= 0) return { ok: false, error: "Buyurtma narxi kiritilmagan. Avval narx kiriting." };
-      const commission = Math.round(price * 0.10);
-      await env.DB.batch([
-        env.DB.prepare(`INSERT OR IGNORE INTO order_finances
-          (order_id, order_price, commission_rate, commission_amount, payment_status, payment_method)
-          VALUES (?, ?, 10, ?, 'Kutilmoqda', 'Naqd')`).bind(id, price, commission),
-        env.DB.prepare("UPDATE orders SET status = 'Tugallandi' WHERE id = ?").bind(id)
-      ]);
-      return { ok: true, order: await getOrder(id), commission };
-    };
-
-    const ensureCustomer = async (name, rawPhone, address = "") => {
-      const p = phone(rawPhone);
-      if (!p) return;
-      await env.DB.prepare(`INSERT INTO customers (name, phone, address)
-        VALUES (?, ?, ?)
-        ON CONFLICT(phone) DO UPDATE SET
-          name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE customers.name END,
-          address = CASE WHEN excluded.address <> '' THEN excluded.address ELSE customers.address END`)
-        .bind(str(name, 150), p, str(address, 300)).run();
-    };
-
-    try {
-      if (!env.DB && path.startsWith("/api/")) return json({ success: false, error: "D1 DB sozlanmagan" }, 500);
-
-      // CUSTOMER TELEGRAM WEBHOOK
-      if (path === "/api/customer-telegram-webhook" && method === "POST") {
-        const received = str(request.headers.get("X-Telegram-Bot-Api-Secret-Token"));
-        const expected = str(env.CUSTOMER_BOT_WEBHOOK_SECRET);
-        if (!expected || received !== expected) return json({ success: false, error: "Webhook ruxsati yo'q" }, 403);
-        const update = await body();
-        const msg = update?.message;
-        if (!msg?.chat?.id) return json({ success: true });
-        const chatId = String(msg.chat.id);
-        if (String(msg.text || "").startsWith("/start")) {
-          await customerTG(chatId, "Assalomu alaykum! USTA 24 mijozlar botiga xush kelibsiz.\n\nBuyurtma holati haqida xabar olish uchun telefon raqamingizni tasdiqlang.", {
-            reply_markup: { keyboard: [[{ text: "📱 Telefon raqamimni yuborish", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
-          });
-          return json({ success: true });
-        }
-        if (msg.contact) {
-          const c = msg.contact;
-          if (!msg.from || !c.user_id || Number(c.user_id) !== Number(msg.from.id)) {
-            await customerTG(chatId, "Iltimos, faqat o'zingizning telefon raqamingizni yuboring.");
-            return json({ success: true });
-          }
-          const p = phone(c.phone_number);
-          if (p.length < 10) { await customerTG(chatId, "Telefon raqami noto'g'ri."); return json({ success: true }); }
-          await env.DB.prepare(`INSERT INTO customer_telegram (phone, chat_id, customer_name) VALUES (?, ?, ?)
-            ON CONFLICT(phone) DO UPDATE SET chat_id = excluded.chat_id, customer_name = excluded.customer_name`)
-            .bind(p, chatId, str(msg.from.first_name, 100)).run();
-          await ensureCustomer(str(msg.from.first_name, 100), p);
-          await customerTG(chatId, "✅ Telefon raqamingiz tasdiqlandi! Endi USTA 24 buyurtmalaringiz haqida xabar olasiz.", { reply_markup: { remove_keyboard: true } });
-        }
-        return json({ success: true });
-      }
-
-      // WORKER TELEGRAM WEBHOOK
-      if (path === "/api/worker-telegram-webhook" && method === "POST") {
-        const received = str(request.headers.get("X-Telegram-Bot-Api-Secret-Token"));
-        const expected = str(env.WORKER_BOT_WEBHOOK_SECRET);
-        if (!expected || received !== expected) return json({ success: false, error: "Webhook ruxsati yo'q" }, 403);
-        const update = await body();
-        const msg = update?.message;
-        if (msg?.chat?.id && String(msg.text || "").startsWith("/start")) {
-          await workerTG(String(msg.chat.id), "Assalomu alaykum! USTA 24 ustalar botiga xush kelibsiz.\n\nBuyurtmalarni olish uchun saytda ro'yxatdan o'tgan telefon raqamingizni tasdiqlang.", {
-            reply_markup: { keyboard: [[{ text: "📱 Telefon raqamimni yuborish", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
-          });
-          return json({ success: true });
-        }
-
-        if (msg?.contact) {
-          const c = msg.contact;
-          if (!msg.from || Number(c.user_id) !== Number(msg.from.id)) {
-            await workerTG(String(msg.chat.id), "Iltimos, faqat o'zingizning telefon raqamingizni yuboring.");
-            return json({ success: true });
-          }
-
-          const p = phone(c.phone_number);
-          const worker = await env.DB.prepare(
-            "SELECT id, name FROM ustalar WHERE phone = ? AND status = 'Faol' LIMIT 1"
-          ).bind(p).first();
-
-          if (!worker) {
-            await workerTG(String(msg.chat.id), "Bu telefon raqami faol ustalar ro'yxatida topilmadi. Administrator bilan bog'laning.");
-            return json({ success: true });
-          }
-
-          await env.DB.prepare("UPDATE ustalar SET telegram_chat_id = ? WHERE id = ?")
-            .bind(String(msg.chat.id), worker.id).run();
-
-          await workerTG(String(msg.chat.id), "✅ Telefon raqamingiz tasdiqlandi. Buyurtmalar kelganda shu bot orqali xabar olasiz.", {
-            reply_markup: { remove_keyboard: true }
-          });
-          return json({ success: true });
-        }
-
-        const callback = update?.callback_query;
-        if (callback) {
-          const data = String(callback.data || "");
-          const match = data.match(/^(accept|start|done)[:_](\d+)$/i);
-
-          if (!match) {
-            await fetch(`https://api.telegram.org/bot${env.WORKER_BOT_TOKEN}/answerCallbackQuery`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ callback_query_id: callback.id, text: "Noto'g'ri buyruq" })
-            });
-            return json({ success: true });
-          }
-
-          const action = match[1].toLowerCase();
-          const orderId = Number(match[2]);
-          const worker = await env.DB.prepare(
-            "SELECT id, name, phone FROM ustalar WHERE telegram_chat_id = ? AND status = 'Faol' LIMIT 1"
-          ).bind(String(callback.from.id)).first();
-
-          const order = await getOrder(orderId);
-          let result;
-
-          if (!worker || !order) {
-            result = { ok: false, error: "Usta yoki buyurtma topilmadi" };
-          } else if (action === "accept") {
-            await env.DB.prepare(
-              "UPDATE orders SET status = 'Qabul qilindi', worker_name = ?, worker_phone = ? WHERE id = ?"
-            ).bind(worker.name, worker.phone, orderId).run();
-            result = { ok: true };
-          } else if (action === "start") {
-            await env.DB.prepare(
-              "UPDATE orders SET status = 'Bajarilmoqda', worker_name = ?, worker_phone = ? WHERE id = ?"
-            ).bind(worker.name, worker.phone, orderId).run();
-            result = { ok: true };
-          } else {
-            result = await completeOrder(orderId);
-          }
-
-          await fetch(`https://api.telegram.org/bot${env.WORKER_BOT_TOKEN}/answerCallbackQuery`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              callback_query_id: callback.id,
-              text: result.ok ? "Buyurtma holati yangilandi" : result.error,
-              show_alert: !result.ok
-            })
-          });
-
-          if (result.ok) {
-            const updated = await getOrder(orderId);
-            await notifyCustomer(updated.phone,
-              `USTA 24: #${orderId} buyurtmangiz holati: ${updated.status}`);
-            await notifyAdmin(`USTA 24 — Buyurtma #${orderId}\nHolati: ${updated.status}\nUsta: ${worker.name}`);
-          }
-          return json({ success: true });
-        }
-
-        return json({ success: true });
-      }
-
-      // SAYTDAN YANGI BUYURTMA
-      if (path === "/api/order" && method === "POST") {
-        const data = await body();
-        if (!data) return json({ success: false, error: "Ma'lumot noto'g'ri" }, 400);
-
-        const name = str(data.name, 150);
-        const p = phone(data.phone);
-        const service = str(data.service, 200);
-        const address = str(data.address, 300);
-        const details = str(data.details, 2000);
-
-        if (!name || p.length < 10 || !service || !address) {
-          return json({ success: false, error: "Ism, telefon, xizmat va manzilni to'liq kiriting" }, 400);
-        }
-
-        const inserted = await env.DB.prepare(
-          `INSERT INTO orders (name, phone, service, address, details, status, source)
-           VALUES (?, ?, ?, ?, ?, 'Yangi', 'Veb-sayt')`
-        ).bind(name, p, service, address, details).run();
-
-        const orderId = inserted.meta?.last_row_id;
-        await ensureCustomer(name, p, address);
-
-        await notifyAdmin(
-          `🛠 USTA 24 — YANGI BUYURTMA\n\nBuyurtma: #${orderId || "?"}\nIsm: ${name}\nTelefon: ${p}\nXizmat: ${service}\nManzil: ${address}\nIzoh: ${details || "Yo'q"}\nManba: Veb-sayt`
-        );
-
-        return json({ success: true, message: "Buyurtma qabul qilindi", order_id: orderId }, 201);
-      }
-
-      // SAYT UCHUN FAOL USTALAR
-      if (path === "/api/ustalar" && method === "GET") {
-        const result = await env.DB.prepare(
-          "SELECT id, name, phone, specialty, status FROM ustalar WHERE status = 'Faol' ORDER BY id DESC"
-        ).all();
-        return json({ success: true, ustalar: result.results || [] });
-      }
-
-      // ADMIN API HIMOYASI
-      if (path.startsWith("/api/admin/")) {
-        if (!adminOK()) return json({ success: false, error: "Admin paroli noto'g'ri" }, 401);
-      }
-
-      // ADMIN STATISTIKA
-      if (path === "/api/admin/stats" && method === "GET") {
-        const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders").first();
-        const fresh = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'Yangi'").first();
-        const progress = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE status IN ('Qabul qilindi', 'Ustaga biriktirildi', 'Bajarilmoqda')").first();
-        const completed = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'Tugallandi'").first();
-        const finance = await env.DB.prepare(`
-          SELECT
-            COALESCE(SUM(commission_amount), 0) AS commission_total,
-            COALESCE(SUM(CASE WHEN payment_status = 'To''landi' THEN commission_amount ELSE 0 END), 0) AS paid_total,
-            COALESCE(SUM(CASE WHEN payment_status = 'Kutilmoqda' THEN commission_amount ELSE 0 END), 0) AS pending_total
-          FROM order_finances
-        `).first();
-        const expenses = await env.DB.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM expenses").first();
-
-        return json({
-          success: true,
-          stats: {
-            total: total.n,
-            new_orders: fresh.n,
-            in_progress: progress.n,
-            completed: completed.n,
-            commission_total: finance.commission_total,
-            paid_total: finance.paid_total,
-            pending_total: finance.pending_total,
-            expenses: expenses.total,
-            profit: finance.commission_total - expenses.total
-          }
-        });
-      }
-
-      // BUYURTMALAR RO'YXATI
-      if (path === "/api/admin/orders" && method === "GET") {
-        const result = await env.DB.prepare(`
-          SELECT o.*,
-            f.order_price AS finance_price,
-            f.commission_amount,
-            f.payment_status,
-            f.payment_method,
-            f.paid_at
-          FROM orders o
-          LEFT JOIN order_finances f ON f.order_id = o.id
-          ORDER BY o.id DESC
-        `).all();
-
-        return json({ success: true, orders: result.results || [] });
-      }
-
-      // YANGI BUYURTMA — ADMIN TOMONIDAN
-      if (path === "/api/admin/orders" && method === "POST") {
-        const data = await body();
-        if (!data) return json({ success: false, error: "Ma'lumot noto'g'ri" }, 400);
-
-        const name = str(data.name, 150);
-        const p = phone(data.phone);
-        const service = str(data.service, 200);
-        const address = str(data.address, 300);
-        const details = str(data.details, 2000);
-        const source = str(data.source || "Boshqa", 50);
-        const price = num(data.price, 0);
-
-        if (!name || p.length < 10 || !service || !address) {
-          return json({ success: false, error: "Ism, telefon, xizmat va manzil kerak" }, 400);
-        }
-        if (price < 0) return json({ success: false, error: "Narx manfiy bo'lishi mumkin emas" }, 400);
-
-        const inserted = await env.DB.prepare(`
-          INSERT INTO orders (name, phone, service, address, details, status, price, source)
-          VALUES (?, ?, ?, ?, ?, 'Yangi', ?, ?)
-        `).bind(name, p, service, address, details, price, source).run();
-
-        await ensureCustomer(name, p, address);
-        const id = inserted.meta?.last_row_id;
-
-        await notifyAdmin(`🛠 USTA 24 — ADMIN BUYURTMASI\nBuyurtma: #${id}\nMijoz: ${name}\nTelefon: ${p}\nXizmat: ${service}\nNarx: ${price.toLocaleString("uz-UZ")} so'm\nManba: ${source}`);
-
-        return json({ success: true, order_id: id }, 201);
-      }
-
-      // BUYURTMANI TAHRIRLASH, NARX VA HOLAT
-      const orderMatch = path.match(/^\/api\/admin\/orders\/(\d+)$/);
-      if (orderMatch && method === "PATCH") {
-        const id = Number(orderMatch[1]);
-        const data = await body();
-        if (!data) return json({ success: false, error: "Ma'lumot noto'g'ri" }, 400);
-
-        const old = await getOrder(id);
-        if (!old) return json({ success: false, error: "Buyurtma topilmadi" }, 404);
-
-        const finance = await env.DB.prepare(
-          "SELECT id FROM order_finances WHERE order_id = ?"
-        ).bind(id).first();
-
-        if (data.price !== undefined) {
-          const price = num(data.price, -1);
-          if (price < 0) return json({ success: false, error: "Narx noto'g'ri" }, 400);
-          if (finance) return json({ success: false, error: "Yakunlangan buyurtma narxini o'zgartirib bo'lmaydi" }, 409);
-          await env.DB.prepare("UPDATE orders SET price = ? WHERE id = ?").bind(price, id).run();
-        }
-
-        if (data.source !== undefined) {
-          await env.DB.prepare("UPDATE orders SET source = ? WHERE id = ?")
-            .bind(str(data.source, 50), id).run();
-        }
-
-        if (data.worker_name !== undefined || data.worker_phone !== undefined) {
-          await env.DB.prepare("UPDATE orders SET worker_name = ?, worker_phone = ?, status = CASE WHEN status = 'Yangi' THEN 'Ustaga biriktirildi' ELSE status END WHERE id = ?")
-            .bind(str(data.worker_name ?? old.worker_name, 150), str(data.worker_phone ?? old.worker_phone, 50), id).run();
-        }
-
-        if (data.status !== undefined) {
-          const allowed = ["Yangi", "Qabul qilindi", "Ustaga biriktirildi", "Bajarilmoqda", "Tugallandi", "Bekor qilindi"];
-          if (!allowed.includes(data.status)) return json({ success: false, error: "Buyurtma holati noto'g'ri" }, 400);
-
-          if (data.status === "Tugallandi") {
-            const latest = await getOrder(id);
-            if (num(latest.price, 0) <= 0) {
-              return json({ success: false, error: "Avval buyurtma narxini kiriting" }, 400);
-            }
-            const result = await completeOrder(id);
-            if (!result.ok) return json({ success: false, error: result.error }, 400);
-          } else {
-            if (finance && data.status !== "Tugallandi") {
-              return json({ success: false, error: "Moliyaviy yozuv yaratilgan buyurtmani qayta ochish mumkin emas" }, 409);
-            }
-            await env.DB.prepare("UPDATE orders SET status = ? WHERE id = ?").bind(data.status, id).run();
-          }
-        }
-
-        const updated = await getOrder(id);
-        if (updated.status !== old.status) {
-          await notifyCustomer(updated.phone, `USTA 24: #${id} buyurtmangiz holati: ${updated.status}`);
-        }
-        return json({ success: true, order: updated });
-      }
-
-      // USTALAR RO'YXATI
-      if (path === "/api/admin/ustalar" && method === "GET") {
-        const result = await env.DB.prepare("SELECT * FROM ustalar ORDER BY id DESC").all();
-        return json({ success: true, ustalar: result.results || [] });
-      }
-
-      // USTA QO'SHISH
-      if (path === "/api/admin/ustalar" && method === "POST") {
-        const data = await body();
-        if (!data) return json({ success: false, error: "Ma'lumot noto'g'ri" }, 400);
-
-        const name = str(data.name, 150);
-        const p = phone(data.phone);
-        const specialty = str(data.specialty, 200);
-        const status = data.status === "Nofaol" ? "Nofaol" : "Faol";
-
-        if (!name || p.length < 10) {
-          return json({ success: false, error: "Usta ismi va telefon raqami kerak" }, 400);
-        }
-
-        try {
-          const result = await env.DB.prepare(
-            "INSERT INTO ustalar (name, phone, specialty, status) VALUES (?, ?, ?, ?)"
-          ).bind(name, p, specialty, status).run();
-
-          return json({ success: true, id: result.meta?.last_row_id }, 201);
-        } catch (e) {
-          return json({ success: false, error: "Usta qo'shilmadi. Telefon raqami takrorlangan bo'lishi mumkin." }, 409);
-        }
-      }
-
-      // USTANI TAHRIRLASH
-      const workerMatch = path.match(/^\/api\/admin\/ustalar\/(\d+)$/);
-      if (workerMatch && method === "PATCH") {
-        const id = Number(workerMatch[1]);
-        const data = await body();
-        if (!data) return json({ success: false, error: "Ma'lumot noto'g'ri" }, 400);
-
-        const old = await env.DB.prepare("SELECT * FROM ustalar WHERE id = ?").bind(id).first();
-        if (!old) return json({ success: false, error: "Usta topilmadi" }, 404);
-
-        const name = str(data.name ?? old.name, 150);
-        const p = phone(data.phone ?? old.phone);
-        const specialty = str(data.specialty ?? old.specialty, 200);
-        const status = data.status === "Nofaol" ? "Nofaol" : (data.status === "Faol" ? "Faol" : old.status);
-
-        await env.DB.prepare(
-          "UPDATE ustalar SET name = ?, phone = ?, specialty = ?, status = ? WHERE id = ?"
-        ).bind(name, p, specialty, status, id).run();
-
-        return json({ success: true });
-      }
-
-      // USTANI O'CHIRISH O'RNIGA NOFAOL QILISH
-      if (workerMatch && method === "DELETE") {
-        const id = Number(workerMatch[1]);
-        const result = await env.DB.prepare(
-          "UPDATE ustalar SET status = 'Nofaol' WHERE id = ?"
-        ).bind(id).run();
-
-        return json({ success: true, changed: result.meta?.changes || 0 });
-      }
-
-      // MIJOZLAR RO'YXATI
-      if (path === "/api/admin/customers" && method === "GET") {
-        const result = await env.DB.prepare(`
-          SELECT c.*,
-            (SELECT COUNT(*) FROM orders o WHERE o.phone = c.phone) AS orders_count,
-            (SELECT MAX(o.created_at) FROM orders o WHERE o.phone = c.phone) AS last_order
-          FROM customers c
-          ORDER BY c.id DESC
-        `).all();
-
-        return json({ success: true, customers: result.results || [] });
-      }
-
-      // MIJOZNING BUYURTMALARI TARIXI
-      const customerMatch = path.match(/^\/api\/admin\/customers\/(\d+)\/orders$/);
-      if (customerMatch && method === "GET") {
-        const customer = await env.DB.prepare(
-          "SELECT * FROM customers WHERE id = ?"
-        ).bind(Number(customerMatch[1])).first();
-
-        if (!customer) return json({ success: false, error: "Mijoz topilmadi" }, 404);
-
-        const result = await env.DB.prepare(
-          "SELECT * FROM orders WHERE phone = ? ORDER BY id DESC"
-        ).bind(customer.phone).all();
-
-        return json({ success: true, orders: result.results || [] });
-      }
-
-      // XIZMATLAR RO'YXATI
-      if (path === "/api/admin/services" && method === "GET") {
-        const result = await env.DB.prepare("SELECT * FROM services ORDER BY id DESC").all();
-        return json({ success: true, services: result.results || [] });
-      }
-
-      // XIZMAT QO'SHISH
-      if (path === "/api/admin/services" && method === "POST") {
-        const data = await body();
-        const name = str(data?.name, 150);
-        const description = str(data?.description, 500);
-        if (!name) return json({ success: false, error: "Xizmat nomini kiriting" }, 400);
-
-        try {
-          const result = await env.DB.prepare(
-            "INSERT INTO services (name, description) VALUES (?, ?)"
-          ).bind(name, description).run();
-          return json({ success: true, id: result.meta?.last_row_id }, 201);
-        } catch (e) {
-          return json({ success: false, error: "Bu xizmat avval qo'shilgan bo'lishi mumkin" }, 409);
-        }
-      }
-
-      // XIZMATNI TAHRIRLASH
-      const serviceMatch = path.match(/^\/api\/admin\/services\/(\d+)$/);
-      if (serviceMatch && method === "PATCH") {
-        const id = Number(serviceMatch[1]);
-        const data = await body();
-        const old = await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first();
-        if (!old) return json({ success: false, error: "Xizmat topilmadi" }, 404);
-
-        await env.DB.prepare(
-          "UPDATE services SET name = ?, description = ?, status = ? WHERE id = ?"
-        ).bind(
-          str(data?.name ?? old.name, 150),
-          str(data?.description ?? old.description, 500),
-          data?.status === "Nofaol" ? "Nofaol" : (data?.status === "Faol" ? "Faol" : old.status),
-          id
-        ).run();
-
-        return json({ success: true });
-      }
-
-      // XIZMATNI NOFAOL QILISH
-      if (serviceMatch && method === "DELETE") {
-        const id = Number(serviceMatch[1]);
-        await env.DB.prepare(
-          "UPDATE services SET status = 'Nofaol' WHERE id = ?"
-        ).bind(id).run();
-        return json({ success: true });
-      }
-
-      // MOLIYAVIY HISOBOT
-      if (path === "/api/admin/finance" && method === "GET") {
-        const commissions = await env.DB.prepare(`
-          SELECT
-            COALESCE(SUM(commission_amount), 0) AS total,
-            COALESCE(SUM(CASE WHEN payment_status = 'To''landi' THEN commission_amount ELSE 0 END), 0) AS paid,
-            COALESCE(SUM(CASE WHEN payment_status = 'Kutilmoqda' THEN commission_amount ELSE 0 END), 0) AS pending
-          FROM order_finances
-        `).first();
-
-        const expenses = await env.DB.prepare(`
-          SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
-        `).first();
-
-        const rows = await env.DB.prepare(`
-          SELECT f.*, o.name AS customer_name, o.phone, o.service
-          FROM order_finances f
-          JOIN orders o ON o.id = f.order_id
-          ORDER BY f.id DESC
-        `).all();
-
-        return json({
-          success: true,
-          summary: {
-            commission: commissions.total,
-            paid: commissions.paid,
-            pending: commissions.pending,
-            expenses: expenses.total,
-            profit: commissions.total - expenses.total
-          },
-          finances: rows.results || []
-        });
-      }
-
-      // XARAJATLAR RO'YXATI
-      if (path === "/api/admin/expenses" && method === "GET") {
-        const result = await env.DB.prepare(
-          "SELECT * FROM expenses ORDER BY expense_date DESC, id DESC"
-        ).all();
-        return json({ success: true, expenses: result.results || [] });
-      }
-
-      // YANGI XARAJAT
-      if (path === "/api/admin/expenses" && method === "POST") {
-        const data = await body();
-        const title = str(data?.title, 200);
-        const category = str(data?.category, 100);
-        const amount = num(data?.amount, -1);
-        const date = str(data?.expense_date, 20);
-        const notes = str(data?.notes, 1000);
-
-        if (!title || amount <= 0) {
-          return json({ success: false, error: "Xarajat nomi va summasini to'g'ri kiriting" }, 400);
-        }
-
-        const result = await env.DB.prepare(`
-          INSERT INTO expenses (title, category, amount, expense_date, notes)
-          VALUES (?, ?, ?, COALESCE(NULLIF(?, ''), CURRENT_DATE), ?)
-        `).bind(title, category, amount, date, notes).run();
-
-        return json({ success: true, id: result.meta?.last_row_id }, 201);
-      }
-
-      // KOMISSIYA TO'LOVINI QAYD ETISH
-      const paymentMatch = path.match(/^\/api\/admin\/finance\/(\d+)\/paid$/);
-      if (paymentMatch && method === "PATCH") {
-        const id = Number(paymentMatch[1]);
-        const finance = await env.DB.prepare(
-          "SELECT * FROM order_finances WHERE id = ?"
-        ).bind(id).first();
-
-        if (!finance) return json({ success: false, error: "Moliyaviy yozuv topilmadi" }, 404);
-
-        await env.DB.prepare(`
-          UPDATE order_finances
-          SET payment_status = 'To''landi',
-              payment_method = 'Naqd',
-              paid_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).bind(id).run();
-
-        return json({ success: true });
-      }
-
-      // SHARHLAR
-      if (path === "/api/admin/reviews" && method === "GET") {
-        const result = await env.DB.prepare(
-          "SELECT * FROM reviews ORDER BY id DESC"
-        ).all();
-        return json({ success: true, reviews: result.results || [] });
-      }
-
-      // SHARH QO'SHISH
-      if (path === "/api/admin/reviews" && method === "POST") {
-        const data = await body();
-        const name = str(data?.customer_name, 150);
-        const p = phone(data?.phone);
-        const rating = num(data?.rating, 0);
-        const comment = str(data?.comment, 2000);
-
-        if (!name || rating < 1 || rating > 5) {
-          return json({ success: false, error: "Ism va 1 dan 5 gacha baho kiriting" }, 400);
-        }
-
-        const result = await env.DB.prepare(`
-          INSERT INTO reviews (customer_name, phone, rating, comment)
-          VALUES (?, ?, ?, ?)
-        `).bind(name, p, rating, comment).run();
-
-        return json({ success: true, id: result.meta?.last_row_id }, 201);
-      }
-
-      // SHARH HOLATINI O'ZGARTIRISH
-      const reviewMatch = path.match(/^\/api\/admin\/reviews\/(\d+)$/);
-      if (reviewMatch && method === "PATCH") {
-        const id = Number(reviewMatch[1]);
-        const data = await body();
-        const allowed = ["Kutilmoqda", "Tasdiqlandi", "Rad etildi"];
-
-        if (!allowed.includes(data?.status)) {
-          return json({ success: false, error: "Sharh holati noto'g'ri" }, 400);
-        }
-
-        await env.DB.prepare(
-          "UPDATE reviews SET status = ? WHERE id = ?"
-        ).bind(data.status, id).run();
-
-        return json({ success: true });
-      }
-
-      // REKLAMA HISOBOTLARI
-      if (path === "/api/admin/ads" && method === "GET") {
-        const result = await env.DB.prepare(
-          "SELECT * FROM ad_campaigns ORDER BY campaign_date DESC, id DESC"
-        ).all();
-        return json({ success: true, campaigns: result.results || [] });
-      }
-
-      // REKLAMA NATIJASINI QO'SHISH
-      if (path === "/api/admin/ads" && method === "POST") {
-        const data = await body();
-        const platform = str(data?.platform, 50);
-        const campaign = str(data?.campaign_name, 200);
-        const spend = num(data?.spend, 0);
-        const impressions = num(data?.impressions, 0);
-        const clicks = num(data?.clicks, 0);
-        const leads = num(data?.leads, 0);
-        const date = str(data?.campaign_date, 20);
-        const notes = str(data?.notes, 1000);
-
-        if (!platform || !campaign || spend < 0 || impressions < 0 || clicks < 0 || leads < 0) {
-          return json({ success: false, error: "Reklama ma'lumotlarini tekshiring" }, 400);
-        }
-
-        const result = await env.DB.prepare(`
-          INSERT INTO ad_campaigns
-            (platform, campaign_name, spend, impressions, clicks, leads, campaign_date, notes)
-          VALUES (?, ?, ?, ?, ?, ?, COALESCE(NULLIF(?, ''), CURRENT_DATE), ?)
-        `).bind(platform, campaign, spend, impressions, clicks, leads, date, notes).run();
-
-        return json({ success: true, id: result.meta?.last_row_id }, 201);
-      }
-
-      // SOZLAMALAR — MAXFIY KALITLAR API ORQALI OCHILMAYDI
-      if (path === "/api/admin/settings" && method === "GET") {
-        const result = await env.DB.prepare(
-          "SELECT setting_key, setting_value, updated_at FROM app_settings ORDER BY setting_key"
-        ).all();
-        return json({ success: true, settings: result.results || [] });
-      }
-
-      if (path === "/api/admin/settings" && method === "POST") {
-        const data = await body();
-        const key = str(data?.setting_key, 100);
-        const value = str(data?.setting_value, 1000);
-
-        const allowedKeys = [
-          "business_name",
-          "business_phone",
-          "instagram",
-          "telegram",
-          "website",
-          "address"
-        ];
-
-        if (!allowedKeys.includes(key)) {
-          return json({ success: false, error: "Bu sozlama kalitiga ruxsat berilmagan" }, 400);
-        }
-
-        await env.DB.prepare(`
-          INSERT INTO app_settings (setting_key, setting_value, updated_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(setting_key) DO UPDATE SET
-            setting_value = excluded.setting_value,
-            updated_at = CURRENT_TIMESTAMP
-        `).bind(key, value).run();
-
-        return json({ success: true });
-      }
-
-      // TOPILMAGAN API YO'LI
-      if (path.startsWith("/api/")) {
-        return json({ success: false, error: "API yo'li topilmadi" }, 404);
-      }
-
-      // SAYT FAYLLARINI OCHISH
-      if (env.ASSETS) {
-        return env.ASSETS.fetch(request);
-      }
-
-      return new Response("USTA24 server ishlayapti", { status: 200 });
-
-    } catch (error) {
-      console.error("USTA24 Worker xatosi:", error);
-      return json({
-        success: false,
-        error: "Serverda xatolik yuz berdi"
-      }, 500);
-    }
-  }
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USTA24 — Admin Panel</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--dark:#172033;--muted:#778197;--blue:#315efb;--line:#e8ebf2;--green:#16a36a;--red:#e34d59}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--dark)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer;border:0}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.login-box{background:white;padding:35px;border-radius:20px;width:100%;max-width:390px;box-shadow:0 15px 50px #1a2b5015}
+.logo{font-size:27px;font-weight:900;color:var(--blue);letter-spacing:1px}
+.login-box p{color:var(--muted)}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0 13px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+.primary{background:var(--blue);color:white;padding:12px 17px;border-radius:10px;font-weight:700}
+.secondary{background:#edf1ff;color:var(--blue);padding:9px 13px;border-radius:9px;font-weight:600}
+.danger{background:#fff0f0;color:var(--red);padding:9px 12px;border-radius:9px}
+.app{display:none;min-height:100vh}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:245px;background:#172033;color:white;padding:25px 16px;overflow:auto}
+.brand{font-size:25px;font-weight:900;padding:5px 12px 28px;color:white}
+.brand span{color:#6f91ff}
+.nav-title{font-size:11px;color:#8792aa;padding:15px 12px 8px;text-transform:uppercase;letter-spacing:1px}
+.nav button{width:100%;text-align:left;padding:12px;border-radius:10px;background:transparent;color:#c6ccda;margin:2px 0}
+.nav button.active,.nav button:hover{background:#2c3b5c;color:white}
+.main{margin-left:245px;padding:28px;max-width:1600px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:25px;gap:12px}
+.topbar h1{font-size:25px;margin:0}
+.user{color:var(--muted);font-size:13px}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:19px}
+.card small{color:var(--muted)}
+.metric{font-size:27px;font-weight:800;margin-top:10px}
+.panel{background:white;border:1px solid var(--line);border-radius:15px;padding:20px;margin-bottom:18px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+.panel h2{font-size:17px;margin:0}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:650px}
+th,td{text-align:left;padding:13px 11px;border-bottom:1px solid var(--line);font-size:13px}
+th{color:var(--muted);font-weight:600;background:#fafbfe}
+td{line-height:1.5}
+.tag{display:inline-block;padding:5px 9px;border-radius:20px;background:#edf1ff;color:#315efb;font-size:11px}
+.tag.green{background:#e7f8ef;color:#168653}
+.tag.red{background:#fff0f0;color:#d84955}
+.muted{color:var(--muted)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.actions button{font-size:12px}
+.empty{text-align:center;padding:30px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mobile-menu{display:none}
+#toast{position:fixed;right:20px;bottom:20px;background:#172033;color:white;padding:13px 18px;border-radius:10px;display:none;z-index:20;max-width:90%}
+@media(max-width:1000px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){
+.sidebar{display:none;width:245px;z-index:10}
+.sidebar.open{display:block}
+.main{margin:0;padding:16px}
+.mobile-menu{display:inline-block;background:#e9edff;color:var(--blue);padding:9px 12px;border-radius:9px}
+.topbar{align-items:flex-start}
+.topbar h1{font-size:20px}
+.cards{gap:9px}
+.card{padding:14px}
+.metric{font-size:21px}
+.grid2,.form-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+  <div class="login-box">
+    <div class="logo">USTA<span style="color:#172033">24</span></div>
+    <h2>Admin panelga kirish</h2>
+    <p>Boshqaruv panelidan foydalanish uchun parolni kiriting.</p>
+    <form id="loginForm">
+      <input id="password" type="password" placeholder="Admin paroli" required>
+      <button class="primary" style="width:100%">Kirish</button>
+    </form>
+    <p id="loginError" style="color:#e34d59"></p>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">USTA<span>24</span></div>
+    <div class="nav">
+      <div class="nav-title">Asosiy</div>
+      <button class="active" data-page="dashboard">▦ Boshqaruv paneli</button>
+      <button data-page="orders">▤ Buyurtmalar</button>
+      <button data-page="workers">♙ Ustalar</button>
+      <button data-page="customers">♧ Mijozlar</button>
+      <div class="nav-title">Boshqaruv</div>
+      <button data-page="services">⚙ Xizmatlar</button>
+      <button data-page="finance">◈ Moliya</button>
+      <button data-page="expenses">↘ Xarajatlar</button>
+      <button data-page="reviews">☆ Sharhlar</button>
+      <button data-page="ads">▣ Reklama</button>
+      <div class="nav-title">Tizim</div>
+      <button data-page="settings">⚙ Sozlamalar</button>
+      <button id="logout">⇥ Chiqish</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="mobile-menu" id="menu">☰</button>
+        <div>
+          <h1 id="pageTitle">Boshqaruv paneli</h1>
+          <div class="user">USTA24 · Andijon</div>
+        </div>
+      </div>
+      <button class="secondary" onclick="loadPage(currentPage)">↻ Yangilash</button>
+    </header>
+    <div id="content"></div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = "/api/admin";
+let token = sessionStorage.getItem("usta24_admin_token") || "";
+let currentPage = "dashboard";
+
+const titles = {
+ dashboard:"Boshqaruv paneli",orders:"Buyurtmalar",workers:"Ustalar",
+ customers:"Mijozlar",services:"Xizmatlar",finance:"Moliya",
+ expenses:"Xarajatlar",reviews:"Mijozlar sharhlari",ads:"Reklama",
+ settings:"Sozlamalar"
 };
+
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+const money = v => Number(v||0).toLocaleString("uz-UZ")+" so'm";
+
+function toast(msg){
+ $("toast").textContent=msg;
+ $("toast").style.display="block";
+ setTimeout(()=>$("toast").style.display="none",3000);
+}
+
+async function api(path,method="GET",body=null){
+ const headers={"Authorization":"Bearer "+token};
+ if(body) headers["Content-Type"]="application/json";
+ const res=await fetch(API+path,{method,headers,body:body?JSON.stringify(body):null});
+ let data={};
+ try{data=await res.json()}catch(e){}
+ if(res.status===401||res.status===403){
+  logout();
+  throw new Error("Parol noto‘g‘ri yoki sessiya tugagan. Qayta kiring.");
+ }
+ if(!res.ok||data.success===false) throw new Error(data.error||data.message||"Xatolik yuz berdi");
+ return data;
+}
+
+function logout(){
+ token="";
+ sessionStorage.removeItem("usta24_admin_token");
+ $("app").style.display="none";
+ $("login").style.display="grid";
+}
+
+$("loginForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ token=$("password").value;
+ try{
+  await api("/stats");
+  sessionStorage.setItem("usta24_admin_token",token);
+  $("login").style.display="none";
+  $("app").style.display="block";
+  loadPage("dashboard");
+ }catch(err){
+  $("loginError").textContent=err.message;
+ }
+});
+
+$("logout").onclick=logout;
+$("menu").onclick=()=>$("sidebar").classList.toggle("open");
+
+document.querySelectorAll(".nav button[data-page]").forEach(btn=>{
+ btn.onclick=()=>{
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  $("sidebar").classList.remove("open");
+  loadPage(btn.dataset.page);
+ };
+});
+
+async function loadPage(page){
+ currentPage=page;
+ $("pageTitle").textContent=titles[page]||page;
+ $("content").innerHTML='<div class="panel">Ma’lumotlar yuklanmoqda...</div>';
+ try{
+  if(page==="dashboard") await dashboard();
+  if(page==="orders") await orders();
+  if(page==="workers") await workers();
+  if(page==="customers") await customers();
+  if(page==="services") await services();
+  if(page==="finance") await finance();
+  if(page==="expenses") await expenses();
+  if(page==="reviews") await reviews();
+  if(page==="ads") await ads();
+  if(page==="settings") await settings();
+ }catch(e){
+  $("content").innerHTML='<div class="panel" style="color:#d84955">'+esc(e.message)+'</div>';
+ }
+}
+
+function table(headers,rows){
+ return '<div class="table-wrap"><table><thead><tr>'+
+ headers.map(h=>'<th>'+h+'</th>').join("")+
+ '</tr></thead><tbody>'+
+ (rows.length?rows.join(""):'<tr><td colspan="'+headers.length+'" class="empty">Hozircha ma’lumot yo‘q</td></tr>')+
+ '</tbody></table></div>';
+}
+
+function stat(label,value,icon){
+ return '<div class="card"><small>'+icon+' '+label+'</small><div class="metric">'+value+'</div></div>';
+}
+
+async function dashboard(){
+ const d=await api("/stats");
+ const s=d.stats||{};
+ $("content").innerHTML=
+ '<div class="cards">'+
+ stat("Jami buyurtmalar",s.total||0,"▤")+
+ stat("Yangi buyurtmalar",s.new_orders||0,"◷")+
+ stat("Jarayonda",s.in_progress||0,"⚙")+
+ stat("Tugallangan",s.completed||0,"✓")+
+ stat("Jami komissiya",money(s.commission_total),"◈")+
+ stat("To‘langan",money(s.paid_total),"↗")+
+ stat("Kutilayotgan",money(s.pending_total),"◷")+
+ stat("Xarajatlar",money(s.expenses),"↘")+
+ '</div>'+
+ '<div class="panel"><h2>Moliyaviy natija</h2><div class="metric">'+money(s.profit)+'</div><p class="muted">Hisoblangan foyda</p></div>'+
+ '<div class="panel"><div class="panel-head"><h2>Tezkor amallar</h2></div>'+
+ '<div class="actions">'+
+ '<button class="primary" onclick="loadPage(\'orders\')">Buyurtmalarni ko‘rish</button>'+
+ '<button class="secondary" onclick="loadPage(\'workers\')">Ustalarni boshqarish</button>'+
+ '<button class="secondary" onclick="loadPage(\'finance\')">Moliyani ko‘rish</button>'+
+ '</div></div>';
+}
+
+async function orders(){
+ const d=await api("/orders");
+ const rows=(d.orders||[]).map(o=>'<tr>'+
+ '<td>#'+esc(o.id)+'</td>'+
+ '<td><b>'+esc(o.name)+'</b><br>'+esc(o.phone)+'</td>'+
+ '<td>'+esc(o.service)+'</td>'+
+ '<td>'+esc(o.address)+'</td>'+
+ '<td>'+money(o.finance_price||o.price)+'</td>'+
+ '<td><span class="tag">'+esc(o.status)+'</span></td>'+
+ '<td>'+esc(o.worker_name||"Biriktirilmagan")+'</td>'+
+ '<td><div class="actions"><button class="secondary" onclick="editOrder('+Number(o.id)+')">Tahrirlash</button></div></td>'+
+ '</tr>');
+ $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Buyurtmalar ro‘yxati</h2><button class="primary" onclick="addOrder()">+ Buyurtma qo‘shish</button></div>'+
+ table(["ID","Mijoz","Xizmat","Manzil","Narx","Holat","Usta","Amal"],rows)+'</div>';
+}
+
+async function addOrder(){
+ const name=prompt("Mijoz ismi:"); if(!name)return;
+ const phone=prompt("Telefon raqami:"); if(!phone)return;
+ const service=prompt("Xizmat turi:"); if(!service)return;
+ const address=prompt("Manzil:")||"";
+ const details=prompt("Qo‘shimcha ma’lumot:")||"";
+ const price=Number(prompt("Narx (so‘m):")||0);
+ try{
+  await api("/orders","POST",{name,phone,service,address,details,source:"Admin",price});
+  toast("Buyurtma qo‘shildi"); orders();
+ }catch(e){toast(e.message)}
+}
+
+async function editOrder(id){
+ try{
+  const d=await api("/orders");
+  const o=(d.orders||[]).find(x=>Number(x.id)===id);
+  if(!o)throw new Error("Buyurtma topilmadi");
+  const status=prompt("Holat:\nYangi\nQabul qilindi\nUstaga biriktirildi\nBajarilmoqda\nTugallandi\nBekor qilindi",o.status||"Yangi");
+  if(status===null)return;
+  const worker_name=prompt("Usta ismi:",o.worker_name||"")||"";
+  const worker_phone=prompt("Usta telefoni:",o.worker_phone||"")||"";
+  const price=Number(prompt("Buyurtma narxi:",o.finance_price||o.price||0)||0);
+  await api("/orders/"+id,"PATCH",{status,worker_name,worker_phone,price});
+  toast("Buyurtma yangilandi"); orders();
+ }catch(e){toast(e.message)}
+}
+
+async function workers(){
+ const d=await api("/ustalar");
+ const rows=(d.ustalar||[]).map(w=>'<tr><td>'+esc(w.name)+'</td><td>'+esc(w.phone)+'</td><td>'+esc(w.specialty)+'</td><td><span class="tag">'+esc(w.status)+'</span></td><td><div class="actions"><button class="secondary" onclick="editWorker('+Number(w.id)+')">Tahrirlash</button><button class="danger" onclick="deactivateWorker('+Number(w.id)+')">Faolsiz</button></div></td></tr>');
+ $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Ustalar ro‘yxati</h2><button class="primary" onclick="addWorker()">+ Usta qo‘shish</button></div>'+
+ table(["Ism","Telefon","Mutaxassislik","Holat","Amallar"],rows)+'</div>';
+}
+async function addWorker(){
+ const name=prompt("Usta ismi:");if(!name)return;
+ const phone=prompt("Telefon:")||"";
+ const specialty=prompt("Mutaxassisligi:")||"";
+ try{await api("/ustalar","POST",{name,phone,specialty,status:"Faol"});toast("Usta qo‘shildi");workers()}catch(e){toast(e.message)}
+}
+async function editWorker(id){
+ try{
+  const d=await api("/ustalar");
+  const w=(d.ustalar||[]).find(x=>Number(x.id)===id);if(!w)return;
+  const name=prompt("Ismi:",w.name);if(name===null)return;
+  const phone=prompt("Telefon:",w.phone||"")||"";
+  const specialty=prompt("Mutaxassislik:",w.specialty||"")||"";
+  const status=prompt("Holat: Faol yoki Nofaol",w.status||"Faol")||w.status;
+  await api("/ustalar/"+id,"PATCH",{name,phone,specialty,status});
+  toast("Usta yangilandi");workers();
+ }catch(e){toast(e.message)}
+}
+async function deactivateWorker(id){
+ if(!confirm("Ustani faolsiz qilasizmi?"))return;
+ try{await api("/ustalar/"+id,"DELETE");toast("Usta faolsiz qilindi");workers()}catch(e){toast(e.message)}
+}
+
+async function customers(){
+ const d=await api("/customers");
+ const rows=(d.customers||[]).map(c=>'<tr><td>'+esc(c.name)+'</td><td>'+esc(c.phone)+'</td><td>'+esc(c.orders_count)+'</td><td>'+esc(c.last_order||"—")+'</td><td><button class="secondary" onclick="customerOrders('+Number(c.id)+')">Buyurtmalari</button></td></tr>');
+ $("content").innerHTML='<div class="panel"><h2>Mijozlar bazasi</h2><br>'+table(["Mijoz","Telefon","Buyurtmalar soni","Oxirgi buyurtma","Tarix"],rows)+'</div>';
+}
+async function customerOrders(id){
+ try{
+  const d=await api("/customers/"+id+"/orders");
+  const rows=(d.orders||[]).map(o=>'<tr><td>#'+esc(o.id)+'</td><td>'+esc(o.service)+'</td><td>'+esc(o.status)+'</td><td>'+money(o.price)+'</td></tr>');
+  $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Mijoz buyurtmalari</h2><button class="secondary" onclick="customers()">← Orqaga</button></div>'+table(["ID","Xizmat","Holat","Narx"],rows)+'</div>';
+ }catch(e){toast(e.message)}
+}
+
+async function services(){
+ const d=await api("/services");
+ const rows=(d.services||[]).map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+esc(s.description)+'</td><td>'+esc(s.status)+'</td><td><div class="actions"><button class="secondary" onclick="editService('+Number(s.id)+')">Tahrirlash</button><button class="danger" onclick="deleteService('+Number(s.id)+')">Faolsiz</button></div></td></tr>');
+ $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Xizmatlar</h2><button class="primary" onclick="addService()">+ Xizmat qo‘shish</button></div>'+table(["Xizmat","Tavsif","Holat","Amallar"],rows)+'</div>';
+}
+async function addService(){
+ const name=prompt("Xizmat nomi:");if(!name)return;
+ const description=prompt("Tavsif:")||"";
+ try{await api("/services","POST",{name,description});toast("Xizmat qo‘shildi");services()}catch(e){toast(e.message)}
+}
+async function editService(id){
+ try{
+  const d=await api("/services");const s=(d.services||[]).find(x=>Number(x.id)===id);if(!s)return;
+  const name=prompt("Nomi:",s.name);if(name===null)return;
+  const description=prompt("Tavsif:",s.description||"")||"";
+  const status=prompt("Holat:",s.status||"Faol")||s.status;
+  await api("/services/"+id,"PATCH",{name,description,status});toast("Saqlandi");services();
+ }catch(e){toast(e.message)}
+}
+async function deleteService(id){
+ if(!confirm("Xizmatni faolsiz qilasizmi?"))return;
+ try{await api("/services/"+id,"DELETE");toast("Xizmat faolsiz qilindi");services()}catch(e){toast(e.message)}
+}
+
+async function finance(){
+ const d=await api("/finance");
+ const s=d.summary||{};
+ const cards='<div class="cards">'+stat("Komissiya",money(s.commission),"◈")+stat("To‘langan",money(s.paid),"✓")+stat("Kutilmoqda",money(s.pending),"◷")+stat("Xarajatlar",money(s.expenses),"↘")+'</div>';
+ const rows=(d.finances||[]).map(f=>'<tr><td>#'+esc(f.id)+'</td><td>#'+esc(f.order_id)+'</td><td>'+money(f.commission_amount||f.amount)+'</td><td>'+esc(f.payment_status)+'</td><td>'+(f.payment_status==="paid"?'—':'<button class="secondary" onclick="markPaid('+Number(f.id)+')">To‘landi</button>')+'</td></tr>');
+ $("content").innerHTML=cards+'<div class="panel"><h2>Moliyaviy operatsiyalar</h2><br>'+table(["ID","Buyurtma","Komissiya","To‘lov holati","Amal"],rows)+'</div>';
+}
+async function markPaid(id){
+ if(!confirm("To‘lov amalga oshirilganini tasdiqlaysizmi?"))return;
+ try{await api("/finance/"+id+"/paid","PATCH",{});toast("To‘lov belgilandi");finance()}catch(e){toast(e.message)}
+}
+
+async function expenses(){
+ const d=await api("/expenses");
+ const rows=(d.expenses||[]).map(x=>'<tr><td>'+esc(x.title)+'</td><td>'+esc(x.category)+'</td><td>'+money(x.amount)+'</td><td>'+esc(x.expense_date)+'</td><td>'+esc(x.notes)+'</td></tr>');
+ $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Xarajatlar</h2><button class="primary" onclick="addExpense()">+ Xarajat kiritish</button></div>'+table(["Nomi","Kategoriya","Summa","Sana","Izoh"],rows)+'</div>';
+}
+async function addExpense(){
+ const title=prompt("Xarajat nomi:");if(!title)return;
+ const category=prompt("Kategoriya:")||"Boshqa";
+ const amount=Number(prompt("Summa (so‘m):")||0);
+ const expense_date=prompt("Sana (YYYY-MM-DD):",new Date().toISOString().slice(0,10));
+ const notes=prompt("Izoh:")||"";
+ try{await api("/expenses","POST",{title,category,amount,expense_date,notes});toast("Xarajat saqlandi");expenses()}catch(e){toast(e.message)}
+}
+
+async function reviews(){
+ const d=await api("/reviews");
+ const rows=(d.reviews||[]).map(r=>'<tr><td>'+esc(r.customer_name)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.rating)+'/5</td><td>'+esc(r.comment)+'</td><td>'+esc(r.status)+'</td><td><select onchange="reviewStatus('+Number(r.id)+',this.value)"><option>Kutilmoqda</option><option>Tasdiqlandi</option><option>Rad etildi</option></select></td></tr>');
+ $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Mijozlar sharhlari</h2><button class="primary" onclick="addReview()">+ Sharh qo‘shish</button></div>'+table(["Mijoz","Telefon","Baho","Fikr","Holat","Boshqarish"],rows)+'</div>';
+}
+async function addReview(){
+ const customer_name=prompt("Mijoz ismi:");if(!customer_name)return;
+ const phone=prompt("Telefon:")||"";
+ const rating=Number(prompt("Baho (1–5):","5")||5);
+ const comment=prompt("Sharh:")||"";
+ try{await api("/reviews","POST",{customer_name,phone,rating,comment});toast("Sharh qo‘shildi");reviews()}catch(e){toast(e.message)}
+}
+async function reviewStatus(id,status){
+ try{await api("/reviews/"+id,"PATCH",{status});toast("Sharh holati saqlandi")}catch(e){toast(e.message)}
+}
+
+async function ads(){
+ const d=await api("/ads");
+ const rows=(d.campaigns||[]).map(a=>'<tr><td>'+esc(a.platform)+'</td><td>'+esc(a.campaign_name)+'</td><td>'+money(a.spend)+'</td><td>'+esc(a.impressions)+'</td><td>'+esc(a.clicks)+'</td><td>'+esc(a.leads)+'</td><td>'+esc(a.campaign_date)+'</td></tr>');
+ $("content").innerHTML='<div class="panel"><div class="panel-head"><h2>Reklama kampaniyalari</h2><button class="primary" onclick="addAd()">+ Kampaniya qo‘shish</button></div>'+table(["Platforma","Kampaniya","Sarflangan","Ko‘rsatish","Bosish","Lidlar","Sana"],rows)+'</div>';
+}
+async function addAd(){
+ const platform=prompt("Platforma (Instagram, Facebook):","Instagram");if(!platform)return;
+ const campaign_name=prompt("Kampaniya nomi:");if(!campaign_name)return;
+ const spend=Number(prompt("Sarflangan mablag‘:")||0);
+ const impressions=Number(prompt("Ko‘rsatishlar soni:")||0);
+ const clicks=Number(prompt("Bosishlar soni:")||0);
+ const leads=Number(prompt("Murojaatlar soni:")||0);
+ const campaign_date=prompt("Sana (YYYY-MM-DD):",new Date().toISOString().slice(0,10));
+ const notes=prompt("Izoh:")||"";
+ try{await api("/ads","POST",{platform,campaign_name,spend,impressions,clicks,leads,campaign_date,notes});toast("Kampaniya qo‘shildi");ads()}catch(e){toast(e.message)}
+}
+
+async function settings(){
+ const d=await api("/settings");
+ const values={};
+ (d.settings||[]).forEach(s=>values[s.setting_key]=s.setting_value);
+ const fields=[
+ ["business_name","Korxona nomi"],["business_phone","Telefon"],
+ ["instagram","Instagram"],["telegram","Telegram"],
+ ["website","Sayt"],["address","Manzil"]
+ ];
+ $("content").innerHTML='<div class="panel"><h2>Biznes ma’lumotlari</h2><p class="muted">Ma’lumotlarni yangilab, saqlash tugmasini bosing.</p>'+
+ fields.map(([key,label])=>'<label>'+label+'</label><input id="setting_'+key+'" value="'+esc(values[key]||"")+'">').join("")+
+ '<button class="primary" onclick="saveSettings()">Sozlamalarni saqlash</button></div>';
+}
+async function saveSettings(){
+ const fields=["business_name","business_phone","instagram","telegram","website","address"];
+ try{
+  for(const key of fields){
+   await api("/settings","POST",{setting_key:key,setting_value:$("setting_"+key).value});
+  }
+  toast("Sozlamalar saqlandi");
+ }catch(e){toast(e.message)}
+}
+
+if(token){
+ $("login").style.display="none";
+ $("app").style.display="block";
+ loadPage("dashboard").catch(()=>logout());
+}
+</script>
+</body>
+</html>
