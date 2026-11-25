@@ -52,7 +52,7 @@ export default {
     };
     const adminTG = (chatId, text, extra) => sendTG(env.TELEGRAM_BOT_TOKEN, chatId, text, extra);
     const customerTG = (chatId, text, extra) => sendTG(env.CUSTOMER_BOT_TOKEN, chatId, text, extra);
-    const workerTG = (chatId, text, extra) => sendTG(env.WORKER_BOT_TOKEN, chatId, text, extra);
+    const workerTG = (chatId, text, extra) => sendTG(env.WORKER_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN, chatId, text, extra);
     const notifyCustomer = async (rawPhone, text) => {
       const p = phone(rawPhone);
       if (!p || !env.DB) return false;
@@ -331,21 +331,23 @@ export default {
         const id = Number(m[1]);
         const order = await getOrder(id);
         if (!order) return json({success:false,error:"Buyurtma topilmadi"},404);
+        const existingFinance = await env.DB.prepare("SELECT * FROM order_finances WHERE order_id=?").bind(id).first();
+        if (existingFinance?.payment_status === "To'landi") return json({success:false,error:"Komissiya to'langan. Buyurtma yopilgan va endi tahrirlanmaydi."},409);
         if (method === "DELETE") {
-          const f = await env.DB.prepare("SELECT id FROM order_finances WHERE order_id=?").bind(id).first();
-          if (f) return json({success:false,error:"Moliyaviy yozuvi mavjud buyurtmani o'chirib bo'lmaydi. Bekor qilingan holatiga o'tkazing."},409);
+          if (existingFinance) return json({success:false,error:"Moliyaviy yozuvi mavjud buyurtmani o'chirib bo'lmaydi. Bekor qilingan holatiga o'tkazing."},409);
           await env.DB.prepare("DELETE FROM orders WHERE id=?").bind(id).run();
           return json({success:true,message:"Buyurtma o'chirildi"});
         }
         const d = await body();
         if (!d) return json({success:false,error:"Ma'lumot noto'g'ri"},400);
-        const existingFinance = await env.DB.prepare("SELECT * FROM order_finances WHERE order_id=?").bind(id).first();
-        if (existingFinance?.payment_status === "To'landi") return json({success:false,error:"Komissiya to'langan. Buyurtma yopilgan va endi tahrirlanmaydi."},409);
-        // Assign a worker
-        if (d.worker_name !== undefined || d.worker_phone !== undefined) {
+        // Assign a worker by unique database ID to avoid selecting the wrong worker when names repeat.
+        if (d.worker_id !== undefined || d.worker_name !== undefined || d.worker_phone !== undefined) {
           if (order.status === "Tugallandi") return json({success:false,error:"Tugallangan buyurtma yopilgan. Ustani qayta biriktirib bo'lmaydi."},409);
+          const workerId = num(d.worker_id,0);
           const wn = str(d.worker_name,150), wp = str(d.worker_phone,40);
-          const w = await env.DB.prepare("SELECT id,name,phone,telegram_chat_id FROM ustalar WHERE name=? AND phone=? AND status='Faol' LIMIT 1").bind(wn,wp).first();
+          const w = workerId > 0
+            ? await env.DB.prepare("SELECT id,name,phone,telegram_chat_id FROM ustalar WHERE id=? AND status='Faol' LIMIT 1").bind(workerId).first()
+            : await env.DB.prepare("SELECT id,name,phone,telegram_chat_id FROM ustalar WHERE name=? AND phone=? AND status='Faol' LIMIT 1").bind(wn,wp).first();
           if (!w) return json({success:false,error:"Faol usta topilmadi"},404);
           await env.DB.prepare("UPDATE orders SET worker_name=?,worker_phone=?,status='Ustaga biriktirildi' WHERE id=?").bind(w.name,w.phone,id).run();
           await notifyCustomer(order.phone,`👨‍🔧 USTA 24 — SIZGA USTA BIRIKTIRILDI\nBuyurtma #${id}\nXizmat: ${order.service}\nUsta: ${w.name}\nTelefon: ${w.phone}`);
