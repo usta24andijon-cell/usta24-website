@@ -278,8 +278,12 @@ export default {
             method:"PUT",headers:{"Authorization":"Bearer "+env.GITHUB_TOKEN,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","Content-Type":"application/json"},
             body:JSON.stringify({message:"Upload USTA24 image "+key,content:base64,branch:"main"})
           });
-          const result=await gh.json();
-          if(!gh.ok) return json({success:false,error:result?.message||"GitHub rasmni saqlay olmadi"},502);
+          const responseText=await gh.text();
+          let result={};
+          try { result=responseText?JSON.parse(responseText):{}; }
+          catch { result={message:responseText.slice(0,260)||"GitHub javobi JSON emas"}; }
+          if(!gh.ok) return json({success:false,error:"GitHub HTTP "+gh.status+": "+String(result?.message||"Rasmni saqlab bo‘lmadi").slice(0,260)},502);
+          if(!result.content?.download_url && !result.content?.path) return json({success:false,error:"GitHub faylni saqlaganini tasdiqlamadi: "+String(result?.message||"Javob noto‘g‘ri").slice(0,220)},502);
           return json({success:true,url:"https://raw.githubusercontent.com/usta24andijon-cell/usta24-website/main/"+filePath,path:filePath});
         } catch(e) { console.error("GitHub image upload error",e); return json({success:false,error:"GitHub bilan aloqa xatosi: "+String(e?.message||e||"noma'lum xato").slice(0,220)},502); }
       }
