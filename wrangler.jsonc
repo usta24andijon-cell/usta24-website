@@ -16,6 +16,20 @@
       "database_id": "7cb3e63f-f446-40da-b24f-9ad56213fef9"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LIVE",
+        "class_name": "Usta24LiveHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Usta24LiveHub"]
+    }
+  ],
   "vars": {
     "TELEGRAM_CHAT_ID": "-1003973917438",
     "USTA24_CHAT_ID": "9051271486"
