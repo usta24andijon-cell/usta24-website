@@ -621,7 +621,45 @@ export default {
         });
       }
 
+            // FAOL USTALAR RO'YXATI
+      if (path === "/api/ustalar" && method === "GET") {
+        const r = await env.DB.prepare(
+          "SELECT id, name, phone, specialty, status FROM ustalar WHERE status = 'Faol' ORDER BY id DESC"
+        ).all();
+
+        return json({
+          success: true,
+          ustalar: r.results || []
+        });
+      }
+
       // ADMIN API PAROLI
+      if (
+        path.startsWith("/api/admin/") &&
+        !adminOK()
+      ) {
+        return json({
+          success: false,
+          error: "Ruxsat yo'q. Admin parolini tekshiring."
+        }, 401);
+      }
+
+      // ADMIN DASHBOARD STATISTIKASI
+      if (path === "/api/admin/stats" && method === "GET") {
+        const orders = await env.DB.prepare(`
+          SELECT COUNT(*) total,
+            SUM(CASE WHEN status='Yangi' THEN 1 ELSE 0 END) new_orders,
+            SUM(CASE WHEN status IN (
+              'Qabul qilindi',
+              'Ustaga biriktirildi',
+              'Bajarilmoqda'
+            ) THEN 1 ELSE 0 END) in_progress,
+            SUM(CASE WHEN status='Tugallandi' THEN 1 ELSE 0 END) completed,
+            SUM(CASE WHEN date(created_at)=date('now') THEN 1 ELSE 0 END) today_orders,
+            SUM(CASE WHEN strftime('%Y-%m',created_at)=strftime('%Y-%m','now') THEN 1 ELSE 0 END) month_orders
+          FROM orders
+        `).first();
+
       if (
         path.startsWith("/api/admin/") &&
         !adminOK()
