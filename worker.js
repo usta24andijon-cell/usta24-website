@@ -833,11 +833,31 @@ export default {
             }, 404);
           }
 
-          await env.DB.prepare(`
-            UPDATE orders
-            SET worker_name=?, worker_phone=?, status='Ustaga biriktirildi'
-            WHERE id=?
-          `).bind(w.name, w.phone, id).run();
+          if (d.price !== undefined) {
+  const price = num(d.price, -1);
+
+  if (price < 0) {
+    return json({
+      success: false,
+      error: "Narx 0 dan kichik bo'lmasligi kerak"
+    }, 400);
+  }
+
+  await env.DB.prepare(`
+    UPDATE orders
+    SET worker_name=?, worker_phone=?,
+        status='Ustaga biriktirildi', price=?
+    WHERE id=?
+  `).bind(w.name, w.phone, price, id).run();
+
+} else {
+  await env.DB.prepare(`
+    UPDATE orders
+    SET worker_name=?, worker_phone=?,
+        status='Ustaga biriktirildi'
+    WHERE id=?
+  `).bind(w.name, w.phone, id).run();
+}
 
           await notifyCustomer(
             order.phone,
