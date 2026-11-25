@@ -218,6 +218,12 @@ export default {
         return json({success:true,message:"Izohingiz moderator tasdig'idan so'ng saytda ko'rinadi"});
       }
 
+      // PUBLIC ACTIVE SERVICES
+      if (path === "/api/services" && method === "GET") {
+        const r = await env.DB.prepare("SELECT id,name,description FROM services WHERE status = 'Faol' ORDER BY name COLLATE NOCASE").all();
+        return json({ success: true, services: r.results || [] });
+      }
+
       // PUBLIC ACTIVE WORKERS
       if (path === "/api/ustalar" && method === "GET") {
         const r = await env.DB.prepare("SELECT id,name,phone,specialty,status,photo_url,experience_years,bio FROM ustalar WHERE status = 'Faol' ORDER BY id DESC").all();
@@ -262,12 +268,15 @@ export default {
         const name = str(d?.name,150), rawPhone = str(d?.phone,40), service = str(d?.service,150), address = str(d?.address,300);
         const details = str(d?.details,2000), source = str(d?.source || "Boshqa",40);
         if (!name || !rawPhone || !service || !address) return json({ success:false,error:"Ism, telefon, xizmat va manzil majburiy" },400);
+        const phoneDigits = phone(rawPhone);
+        if (!/^998\d{9}$/.test(phoneDigits)) return json({success:false,error:"Faqat O‘zbekiston telefon raqami: +998 va 9 ta raqam kiriting."},400);
+        const uzPhone = "+" + phoneDigits;
         const allowedSources = ["Instagram","Telegram","Telefon","Veb-sayt","Boshqa"];
         if (!allowedSources.includes(source)) return json({success:false,error:"Buyurtma manbasi noto'g'ri"},400);
         const r = await env.DB.prepare(`INSERT INTO orders (name,phone,service,address,details,status,created_at,source)
-          VALUES (?,?,?,?,?,'Yangi',datetime('now'),?)`).bind(name,rawPhone,service,address,details,source).run();
-        await ensureCustomer(name,rawPhone,address);
-        await notifyAdmin(`🆕 USTA24 — ADMIN YANGI BUYURTMA\n#${r.meta?.last_row_id}\n${name}\n${rawPhone}\n${service}\nManba: ${source}`);
+          VALUES (?,?,?,?,?,'Yangi',datetime('now'),?)`).bind(name,uzPhone,service,address,details,source).run();
+        await ensureCustomer(name,uzPhone,address);
+        await notifyAdmin(`🆕 USTA24 — ADMIN YANGI BUYURTMA\n#${r.meta?.last_row_id}\n${name}\n${uzPhone}\n${service}\nManba: ${source}`);
         return json({success:true,id:r.meta?.last_row_id,message:"Buyurtma qo'shildi"});
       }
 
@@ -298,7 +307,7 @@ export default {
         }
         const updates = [];
         if (d.name !== undefined) updates.push(["name",str(d.name,150)]);
-        if (d.phone !== undefined) updates.push(["phone",str(d.phone,40)]);
+        if (d.phone !== undefined) { const pd=phone(d.phone); if(!/^998\d{9}$/.test(pd)) return json({success:false,error:"Faqat O‘zbekiston telefon raqami: +998 va 9 ta raqam kiriting."},400); updates.push(["phone","+"+pd]); }
         if (d.service !== undefined) updates.push(["service",str(d.service,150)]);
         if (d.address !== undefined) updates.push(["address",str(d.address,300)]);
         if (d.details !== undefined) updates.push(["details",str(d.details,2000)]);
