@@ -223,6 +223,11 @@ export default {
         return json({ success: true, message: "Buyurtma saqlandi", orderId: id, telegramSent: tg > 0, workersNotified: tg, customerNotified });
       }
 
+      if (path === "/api/public-settings" && method === "GET") {
+        const r = await env.DB.prepare("SELECT setting_key,setting_value FROM app_settings WHERE setting_key IN ('public_phone','telegram_channel','customer_bot_url','website_url','public_address','admin_telegram')").all();
+        return json({success:true,settings:Object.fromEntries((r.results||[]).map(x=>[x.setting_key,x.setting_value]))});
+      }
+
       // PUBLIC SITE CONTENT, GALLERY AND REVIEWS
       if (path === "/api/site-content" && method === "GET") {
         const r = await env.DB.prepare("SELECT content_key,content_value FROM site_content").all();
@@ -519,7 +524,7 @@ export default {
         const r=await env.DB.prepare("SELECT setting_key,setting_value,updated_at FROM app_settings ORDER BY setting_key").all();return json({success:true,settings:r.results||[]});
       }
       if(path==="/api/admin/settings" && method==="PATCH"){
-        const d=await body(); const allowed={public_phone:100,telegram_channel:300,customer_bot_url:300,website_url:300};
+        const d=await body(); const allowed={public_phone:100,telegram_channel:300,customer_bot_url:300,website_url:300,public_address:300,admin_telegram:100};
         const entries=Object.entries(d||{});
         if(!entries.length) return json({success:false,error:"Sozlama yuborilmadi"},400);
         for(const [key,value] of entries){if(!(key in allowed))return json({success:false,error:"Bu sozlamani o'zgartirishga ruxsat yo'q: "+key},400);await env.DB.prepare(`INSERT INTO app_settings(setting_key,setting_value,updated_at) VALUES(?,?,datetime('now')) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=datetime('now')`).bind(key,str(value,allowed[key])).run();}
