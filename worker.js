@@ -613,7 +613,7 @@ export default {
         const id = saved.meta?.last_row_id;
         await notifyLive("order_created", id);
         await ensureCustomer(name, rawPhone, address);
-
+        await notifyLive("order_created", r.meta?.last_row_id);
         const tg = await notifyAdmin(
           `🆕 USTA 24 — YANGI BUYURTMA\n\n🆔 #${id}\n👤 ${name}\n📞 ${rawPhone}\n🔧 ${service}\n📍 ${address}\n📝 ${details || "Yo'q"}\n📌 Yangi\n🌐 Manba: Veb-sayt`
         );
