@@ -268,9 +268,9 @@ export default {
       if (path === "/api/admin/upload" && method === "POST") {
         if (!env.GITHUB_TOKEN) return json({success:false,error:"GitHub token sozlanmagan. Cloudflare Worker Secret: GITHUB_TOKEN kerak."},503);
         const d=await body();
-        const mime=str(d?.mime,80), base64=str(d?.base64,4_200_000), folder=["workers","gallery","site"].includes(str(d?.folder,20))?str(d.folder,20):"site";
+        const mime=str(d?.mime,80), base64=str(d?.base64,4_300_000), folder=["workers","gallery","site"].includes(str(d?.folder,20))?str(d.folder,20):"site";
         if(!/^image\/(jpeg|png|webp|gif)$/.test(mime)) return json({success:false,error:"Faqat JPG, PNG, WEBP yoki GIF rasm yuklang."},400);
-        if(!base64 || base64.length>4_000_000) return json({success:false,error:"Rasm hajmi 3 MB dan oshmasin."},413);
+        if(!base64 || base64.length>4_300_000) return json({success:false,error:"Rasm hajmi 3 MB dan oshmasin."},413);
         const ext=({ "image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif" })[mime];
         const key=crypto.randomUUID()+"."+ext, filePath="uploads/"+folder+"/"+key;
         try {
@@ -281,7 +281,7 @@ export default {
           const result=await gh.json();
           if(!gh.ok) return json({success:false,error:result?.message||"GitHub rasmni saqlay olmadi"},502);
           return json({success:true,url:"https://raw.githubusercontent.com/usta24andijon-cell/usta24-website/main/"+filePath,path:filePath});
-        } catch(e) { console.error("GitHub image upload error",e); return json({success:false,error:"Rasm yuklashda xatolik yuz berdi"},502); }
+        } catch(e) { console.error("GitHub image upload error",e); return json({success:false,error:"GitHub bilan aloqa xatosi: "+String(e?.message||e||"noma'lum xato").slice(0,220)},502); }
       }
 
       // DASHBOARD STATS
