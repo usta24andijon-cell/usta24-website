@@ -1798,3 +1798,62 @@ export default {
     }
   }
 };
+export class Usta24LiveHub {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.sessions = new Set();
+
+    this.ctx.getWebSockets().forEach(ws => {
+      this.sessions.add(ws);
+    });
+  }
+
+  async fetch(request) {
+    const upgrade = request.headers.get("Upgrade");
+
+    if (upgrade !== "websocket") {
+      return new Response("WebSocket ulanishi kerak", {
+        status: 426
+      });
+    }
+
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+
+    server.accept();
+    this.sessions.add(server);
+
+    server.addEventListener("close", () => {
+      this.sessions.delete(server);
+    });
+
+    server.addEventListener("error", () => {
+      this.sessions.delete(server);
+    });
+
+    server.send(JSON.stringify({
+      type: "connected",
+      message: "USTA24 real vaqt tizimiga ulandi"
+    }));
+
+    return new Response(null, {
+      status: 101,
+      webSocket: client
+    });
+  }
+
+  async broadcast(data) {
+    const message = JSON.stringify(data);
+
+    for (const ws of this.sessions) {
+      try {
+        ws.send(message);
+      } catch {
+        this.sessions.delete(ws);
+      }
+    }
+  }
+}
+
