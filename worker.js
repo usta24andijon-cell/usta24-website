@@ -27,6 +27,29 @@ export default {
         h.startsWith("Bearer ") &&
         h.slice(7) === env.ADMIN_PASSWORD
       );
+    };   
+    // REAL VAQTDA ADMIN PANELGA XABAR YUBORISH
+    const notifyLive = async (type, orderId) => {
+      try {
+        if (!env.LIVE) return;
+
+        const id = env.LIVE.idFromName("usta24-admin");
+        const liveHub = env.LIVE.get(id);
+
+        await liveHub.fetch("https://live.internal/broadcast", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            type,
+            orderId,
+            at: Date.now()
+          })
+        });
+      } catch (e) {
+        console.error("USTA24 LIVE XATOSI:", e);
+      }
     };
 
     const str = (v, max = 1000) =>
