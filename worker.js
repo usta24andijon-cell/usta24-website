@@ -1457,6 +1457,12 @@ if (env.ASSETS) {
     method === "GET" &&
     (path === "/" || path === "/admin" || path === "/admin.html")
   ) {
+    // SAYT VA ADMIN FAYLLARINI OCHISH
+if (env.ASSETS) {
+  if (
+    method === "GET" &&
+    (path === "/" || path === "/admin" || path === "/admin.html")
+  ) {
     const assetPath = path === "/" ? "/index.html" : "/admin.html";
     const assetUrl = new URL(assetPath, url.origin);
 
@@ -1472,7 +1478,9 @@ return new Response(
   "USTA24 server ishlayapti, lekin ASSETS binding sozlanmagan.",
   {
     status: 500,
-    headers: { "Content-Type": "text/plain; charset=utf-8" }
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8"
+    }
   }
 );
 
