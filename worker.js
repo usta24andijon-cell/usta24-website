@@ -1451,26 +1451,30 @@ export default {
       // ==================================================
       if (env.ASSETS) {
         if (
-          method === "GET" &&
-          (path === "/" || path === "/admin" || path === "/admin.html")
-        ) {
-          const assetPath =
-            path === "/" ? "/index.html" : "/admin.html";
+          // SAYT VA ADMIN FAYLLARINI OCHISH
+if (env.ASSETS) {
+  if (
+    method === "GET" &&
+    (path === "/" || path === "/admin" || path === "/admin.html")
+  ) {
+    const assetPath = path === "/" ? "/index.html" : "/admin.html";
+    const assetUrl = new URL(assetPath, url.origin);
 
-          const assetUrl = new URL(assetPath, url.origin);
+    return env.ASSETS.fetch(
+      new Request(assetUrl.toString(), request)
+    );
+  }
 
-          return env.ASSETS.fetch(
-            new Request(assetUrl.toString(), request)
-          );
-        }
+  return env.ASSETS.fetch(request);
+}
 
-        return env.ASSETS.fetch(request);
-      }
-
-      return new Response(
-        "USTA24 server ishlayapti, lekin ASSETS binding sozlanmagan.",
-        { status: 500, headers: corsHeaders }
-      );
+return new Response(
+  "USTA24 server ishlayapti, lekin ASSETS binding sozlanmagan.",
+  {
+    status: 500,
+    headers: { "Content-Type": "text/plain; charset=utf-8" }
+  }
+);
 
     } catch (error) {
       console.error("USTA24 Worker xatosi:", error);
