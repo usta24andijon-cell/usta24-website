@@ -1457,12 +1457,6 @@ if (env.ASSETS) {
     method === "GET" &&
     (path === "/" || path === "/admin" || path === "/admin.html")
   ) {
-    // SAYT VA ADMIN FAYLLARINI OCHISH
-if (env.ASSETS) {
-  if (
-    method === "GET" &&
-    (path === "/" || path === "/admin" || path === "/admin.html")
-  ) {
     const assetPath = path === "/" ? "/index.html" : "/admin.html";
     const assetUrl = new URL(assetPath, url.origin);
 
