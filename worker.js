@@ -52,7 +52,8 @@ export default {
     };
     const adminTG = (chatId, text, extra) => sendTG(env.TELEGRAM_BOT_TOKEN, chatId, text, extra);
     const customerTG = (chatId, text, extra) => sendTG(env.CUSTOMER_BOT_TOKEN, chatId, text, extra);
-    const workerTG = (chatId, text, extra) => sendTG(env.WORKER_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN, chatId, text, extra);
+    const workerBotToken = env.WORKER_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN;
+    const workerTG = (chatId, text, extra) => sendTG(workerBotToken, chatId, text, extra);
     const notifyCustomer = async (rawPhone, text) => {
       const p = phone(rawPhone);
       if (!p || !env.DB) return false;
@@ -160,9 +161,9 @@ export default {
           const id = Number(parts[2]);
           const statusMap = { accept: "Qabul qilindi", start: "Bajarilmoqda", done: "Tugallandi" };
           const answer = async text => {
-            if (!env.WORKER_BOT_TOKEN) return;
+            if (!workerBotToken) return;
             try {
-              await fetch(`https://api.telegram.org/bot${env.WORKER_BOT_TOKEN}/answerCallbackQuery`, {
+              await fetch(`https://api.telegram.org/bot${workerBotToken}/answerCallbackQuery`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ callback_query_id: cb.id, text, show_alert: false })
@@ -185,7 +186,7 @@ export default {
           await answer("Holat yangilandi: " + statusMap[action]);
           const next = { accept: [[{ text: "🚧 Ishni boshlash", callback_data: `w:start:${id}` }]], start: [[{ text: "🏁 Ish tugadi", callback_data: `w:done:${id}` }]], done: [] };
           if (cb.message?.chat?.id && cb.message?.message_id) {
-            try { await fetch(`https://api.telegram.org/bot${env.WORKER_BOT_TOKEN}/editMessageReplyMarkup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: cb.message.chat.id, message_id: cb.message.message_id, reply_markup: { inline_keyboard: next[action] } }) }); } catch (e) { console.error(e); }
+            try { await fetch(`https://api.telegram.org/bot${workerBotToken}/editMessageReplyMarkup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: cb.message.chat.id, message_id: cb.message.message_id, reply_markup: { inline_keyboard: next[action] } }) }); } catch (e) { console.error(e); }
           }
           await notifyCustomer(order.phone, `📢 USTA 24 — BUYURTMANGIZ HOLATI YANGILANDI\n\n🆔 Buyurtma: #${id}\n🔧 Xizmat: ${order.service}\n📌 Holat: ${statusMap[action]}\n👨‍🔧 Usta: ${worker.name}`);
           await notifyAdmin(`👨‍🔧 USTA BUYURTMA HOLATINI O'ZGARTIRDI\n🆔 #${id}\n👨‍🔧 ${worker.name}\n📌 ${statusMap[action]}`);
