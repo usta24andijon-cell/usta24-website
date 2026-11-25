@@ -1138,7 +1138,8 @@ export default {
             `📢 USTA 24 — BUYURTMANGIZ HOLATI\nBuyurtma #${id}\nHolat: ${fresh.status}`
           );
         }
-
+        await notifyLive("order_updated", id);
+       
         return json({
           success: true,
           message: "Buyurtma yangilandi",
