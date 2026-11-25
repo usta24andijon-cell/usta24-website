@@ -1841,6 +1841,64 @@ export class Usta24LiveHub {
     this.ctx = ctx;
     this.env = env;
     this.sessions = new Set();
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    // Buyurtma o'zgarishini ulangan adminlarga yuborish
+    if (url.pathname === "/broadcast" && request.method === "POST") {
+      const data = await request.json();
+      const message = JSON.stringify(data);
+
+      for (const ws of this.sessions) {
+        try {
+          ws.send(message);
+        } catch (e) {
+          this.sessions.delete(ws);
+        }
+      }
+
+      return new Response("OK");
+    }
+
+    // WebSocket ulanishi
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("WebSocket ulanishi kerak", {
+        status: 426
+      });
+    }
+
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+
+    server.accept();
+    this.sessions.add(server);
+
+    server.addEventListener("close", () => {
+      this.sessions.delete(server);
+    });
+
+    server.addEventListener("error", () => {
+      this.sessions.delete(server);
+    });
+
+    server.send(JSON.stringify({
+      type: "connected",
+      message: "USTA24 real vaqt tizimiga ulandi"
+    }));
+
+    return new Response(null, {
+      status: 101,
+      webSocket: client
+    });
+  }
+}
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.sessions = new Set();
 
     this.ctx.getWebSockets().forEach(ws => {
       this.sessions.add(ws);
