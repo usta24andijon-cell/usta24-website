@@ -84,20 +84,35 @@ export default {
     };
 
     // A completed order must have a price. UNIQUE(order_id) prevents duplicate commission rows.
-    const completeOrder = async (id) => {
+    const completeOrder = async (id, expectedWorkerId = null) => {
       const order = await getOrder(id);
       if (!order) return { ok: false, error: "Buyurtma topilmadi" };
+      if (expectedWorkerId !== null && (Number(order.worker_id || 0) !== Number(expectedWorkerId) || order.status !== "Bajarilmoqda")) {
+        return { ok: false, error: "Buyurtma sizga biriktirilmagan yoki holati o'zgargan." };
+      }
       const price = num(order.price, 0);
       if (price <= 0) return { ok: false, error: "Buyurtma narxi kiritilmagan. Avval narx kiriting." };
       const commission = Math.round(price * 0.10);
-      await env.DB.batch([
-        env.DB.prepare(`INSERT OR IGNORE INTO order_finances
-          (order_id, order_price, commission_rate, commission_amount, payment_status, payment_method)
-          VALUES (?, ?, 10, ?, 'Kutilmoqda', 'Naqd')`).bind(id, price, commission),
-        env.DB.prepare("UPDATE orders SET status = 'Tugallandi' WHERE id = ?").bind(id),
-        env.DB.prepare(`UPDATE order_finances SET order_price=?, commission_rate=10, commission_amount=?
-          WHERE order_id=? AND payment_status <> 'To''landi'`).bind(price, commission, id)
-      ]);
+      if (expectedWorkerId !== null) {
+        const changed = await env.DB.prepare("UPDATE orders SET status='Tugallandi' WHERE id=? AND worker_id=? AND status='Bajarilmoqda'").bind(id, Number(expectedWorkerId)).run();
+        if (Number(changed.meta?.changes || 0) !== 1) return { ok: false, error: "Buyurtma boshqa joyda o'zgargan. Admin bilan bog'laning." };
+        await env.DB.batch([
+          env.DB.prepare(`INSERT OR IGNORE INTO order_finances
+            (order_id, order_price, commission_rate, commission_amount, payment_status, payment_method)
+            VALUES (?, ?, 10, ?, 'Kutilmoqda', 'Naqd')`).bind(id, price, commission),
+          env.DB.prepare(`UPDATE order_finances SET order_price=?, commission_rate=10, commission_amount=?
+            WHERE order_id=? AND payment_status <> 'To''landi'`).bind(price, commission, id)
+        ]);
+      } else {
+        await env.DB.batch([
+          env.DB.prepare(`INSERT OR IGNORE INTO order_finances
+            (order_id, order_price, commission_rate, commission_amount, payment_status, payment_method)
+            VALUES (?, ?, 10, ?, 'Kutilmoqda', 'Naqd')`).bind(id, price, commission),
+          env.DB.prepare("UPDATE orders SET status = 'Tugallandi' WHERE id = ?").bind(id),
+          env.DB.prepare(`UPDATE order_finances SET order_price=?, commission_rate=10, commission_amount=?
+            WHERE order_id=? AND payment_status <> 'To''landi'`).bind(price, commission, id)
+        ]);
+      }
       return { ok: true, order: await getOrder(id), commission };
     };
 
@@ -197,7 +212,7 @@ export default {
           const allowed = { accept: ["Ustaga biriktirildi"], start: ["Qabul qilindi"], done: ["Bajarilmoqda"] };
           if (!allowed[action].includes(str(order.status))) { await answer("Buyurtma holati o'zgargan yoki bu amal mumkin emas."); return json({ success: true }); }
           if (action === "done") {
-            const completed = await completeOrder(id);
+            const completed = await completeOrder(id, worker.id);
             if (!completed.ok) { await answer(completed.error); await workerTG(String(cb.from.id), `⚠️ ${completed.error}\nAdmin buyurtma narxini kiritishi kerak.`); return json({ success: true }); }
           } else {
             const changed = await env.DB.prepare("UPDATE orders SET status = ? WHERE id = ? AND COALESCE(worker_id,0) = ? AND status = ?").bind(statusMap[action], id, Number(order.worker_id || worker.id), str(order.status)).run();
