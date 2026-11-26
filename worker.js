@@ -66,6 +66,23 @@ export default {
     // Ustalarga umumiy tarqatma yo'q: faqat admin va aniq biriktirilgan ustaga xabar yuboriladi.
     const getOrder = id => env.DB.prepare("SELECT * FROM orders WHERE id = ? LIMIT 1").bind(id).first();
 
+    // 10% commission reconciliation: create missing records for every completed,
+    // priced order; refresh only unpaid records so paid accounting is immutable.
+    const syncCompletedCommissions = async () => {
+      await env.DB.prepare(`INSERT OR IGNORE INTO order_finances
+        (order_id, order_price, commission_rate, commission_amount, payment_status, payment_method)
+        SELECT id, price, 10, CAST(ROUND(price * 0.10) AS INTEGER), 'Kutilmoqda', 'Naqd'
+        FROM orders
+        WHERE status = 'Tugallandi' AND COALESCE(price, 0) > 0`).run();
+      await env.DB.prepare(`UPDATE order_finances
+        SET order_price = (SELECT price FROM orders WHERE orders.id = order_finances.order_id),
+            commission_rate = 10,
+            commission_amount = CAST(ROUND((SELECT price FROM orders WHERE orders.id = order_finances.order_id) * 0.10) AS INTEGER)
+        WHERE payment_status <> 'To''landi'
+          AND EXISTS (SELECT 1 FROM orders WHERE orders.id = order_finances.order_id
+                      AND orders.status = 'Tugallandi' AND COALESCE(orders.price, 0) > 0)`).run();
+    };
+
     // A completed order must have a price. UNIQUE(order_id) prevents duplicate commission rows.
     const completeOrder = async (id) => {
       const order = await getOrder(id);
@@ -77,7 +94,9 @@ export default {
         env.DB.prepare(`INSERT OR IGNORE INTO order_finances
           (order_id, order_price, commission_rate, commission_amount, payment_status, payment_method)
           VALUES (?, ?, 10, ?, 'Kutilmoqda', 'Naqd')`).bind(id, price, commission),
-        env.DB.prepare("UPDATE orders SET status = 'Tugallandi' WHERE id = ?").bind(id)
+        env.DB.prepare("UPDATE orders SET status = 'Tugallandi' WHERE id = ?").bind(id),
+        env.DB.prepare(`UPDATE order_finances SET order_price=?, commission_rate=10, commission_amount=?
+          WHERE order_id=? AND payment_status <> 'To''landi'`).bind(price, commission, id)
       ]);
       return { ok: true, order: await getOrder(id), commission };
     };
@@ -281,6 +300,7 @@ export default {
 
       // DASHBOARD STATS
       if (path === "/api/admin/stats" && method === "GET") {
+        await syncCompletedCommissions();
         const orders = await env.DB.prepare(`SELECT COUNT(*) total,
           SUM(CASE WHEN status='Yangi' THEN 1 ELSE 0 END) new_orders,
           SUM(CASE WHEN status IN ('Qabul qilindi','Ustaga biriktirildi','Bajarilmoqda') THEN 1 ELSE 0 END) in_progress,
@@ -304,6 +324,7 @@ export default {
 
       // ORDERS: LIST + MANUAL CREATE
       if (path === "/api/admin/orders" && method === "GET") {
+        await syncCompletedCommissions();
         const r = await env.DB.prepare(`SELECT o.*, f.order_price AS finance_price, f.commission_rate, f.commission_amount,
           f.payment_status AS commission_payment_status, f.payment_method, f.paid_at
           FROM orders o LEFT JOIN order_finances f ON f.order_id=o.id ORDER BY o.id DESC`).all();
@@ -405,7 +426,14 @@ export default {
             const commission = Math.round(num(d.price) * 0.10);
             await env.DB.prepare("UPDATE order_finances SET order_price=?,commission_amount=?,commission_rate=10 WHERE order_id=?").bind(num(d.price),commission,id).run();
           }
-          if (fresh.status === "Tugallandi" && order.status !== "Tugallandi" && !f && num(d.price) > 0) await completeOrder(id);
+          if (fresh.status === "Tugallandi" && num(d.price) > 0) {
+            if (!f) await completeOrder(id);
+            else if (f.payment_status !== "To'landi") {
+              const commission = Math.round(num(d.price) * 0.10);
+              await env.DB.prepare("UPDATE order_finances SET order_price=?,commission_rate=10,commission_amount=? WHERE order_id=? AND payment_status <> 'To''landi'")
+                .bind(num(d.price), commission, id).run();
+            }
+          }
         }
         if (d.status !== undefined) await notifyCustomer(fresh.phone,`📢 USTA 24 — BUYURTMANGIZ HOLATI\nBuyurtma #${id}\nHolat: ${fresh.status}`);
         await notifyAdmin(`✏️ BUYURTMA YANGILANDI\n🆔 #${id}\n👤 ${fresh.name}\n🔧 ${fresh.service}\n📌 ${fresh.status}`);
@@ -474,6 +502,7 @@ export default {
 
       // FINANCE SUMMARY, COMMISSIONS, CASH COLLECTION
       if(path==="/api/admin/finance" && method==="GET"){
+        await syncCompletedCommissions();
         const summary=await env.DB.prepare(`SELECT COALESCE(SUM(commission_amount),0) revenue,
           COALESCE(SUM(CASE WHEN payment_status='To''landi' THEN commission_amount ELSE 0 END),0) paid,
           COALESCE(SUM(CASE WHEN payment_status='Kutilmoqda' THEN commission_amount ELSE 0 END),0) pending FROM order_finances`).first();
