@@ -215,7 +215,7 @@ export default {
             const completed = await completeOrder(id, worker.id);
             if (!completed.ok) { await answer(completed.error); await workerTG(String(cb.from.id), `⚠️ ${completed.error}\nAdmin buyurtma narxini kiritishi kerak.`); return json({ success: true }); }
           } else {
-            const changed = await env.DB.prepare("UPDATE orders SET status = ? WHERE id = ? AND COALESCE(worker_id,0) = ? AND status = ?").bind(statusMap[action], id, Number(order.worker_id || worker.id), str(order.status)).run();
+            const changed = await env.DB.prepare("UPDATE orders SET status = ? WHERE id = ? AND COALESCE(worker_id,0) = ? AND status = ?").bind(statusMap[action], id, Number(order.worker_id || 0), str(order.status)).run();
             if (Number(changed.meta?.changes || 0) !== 1) { await answer("Buyurtma holati boshqa joyda o'zgargan. Yangilang."); return json({ success: true }); }
           }
           await answer("Holat yangilandi: " + statusMap[action]);
