@@ -193,14 +193,15 @@ export default {
           const worker = await env.DB.prepare("SELECT id, name, phone FROM ustalar WHERE telegram_chat_id = ? AND status = 'Faol' LIMIT 1").bind(String(cb.from.id)).first();
           if (!worker) { await answer("Siz faol usta sifatida topilmadingiz."); return json({ success: true }); }
           const order = await getOrder(id);
-          if (!order || !order.worker_phone || phone(order.worker_phone) !== phone(worker.phone)) { await answer("Bu buyurtma sizga biriktirilmagan."); return json({ success: true }); }
+          if (!order || (Number(order.worker_id || 0) !== Number(worker.id) && (!order.worker_phone || phone(order.worker_phone) !== phone(worker.phone)))) { await answer("Bu buyurtma sizga biriktirilmagan."); return json({ success: true }); }
           const allowed = { accept: ["Ustaga biriktirildi"], start: ["Qabul qilindi"], done: ["Bajarilmoqda"] };
           if (!allowed[action].includes(str(order.status))) { await answer("Buyurtma holati o'zgargan yoki bu amal mumkin emas."); return json({ success: true }); }
           if (action === "done") {
             const completed = await completeOrder(id);
             if (!completed.ok) { await answer(completed.error); await workerTG(String(cb.from.id), `⚠️ ${completed.error}\nAdmin buyurtma narxini kiritishi kerak.`); return json({ success: true }); }
           } else {
-            await env.DB.prepare("UPDATE orders SET status = ? WHERE id = ?").bind(statusMap[action], id).run();
+            const changed = await env.DB.prepare("UPDATE orders SET status = ? WHERE id = ? AND COALESCE(worker_id,0) = ? AND status = ?").bind(statusMap[action], id, Number(order.worker_id || worker.id), str(order.status)).run();
+            if (Number(changed.meta?.changes || 0) !== 1) { await answer("Buyurtma holati boshqa joyda o'zgargan. Yangilang."); return json({ success: true }); }
           }
           await answer("Holat yangilandi: " + statusMap[action]);
           const next = { accept: [[{ text: "🚧 Ishni boshlash", callback_data: `w:start:${id}` }]], start: [[{ text: "🏁 Ish tugadi", callback_data: `w:done:${id}` }]], done: [] };
@@ -364,18 +365,22 @@ export default {
         if (!d) return json({success:false,error:"Ma'lumot noto'g'ri"},400);
         // Assign a worker by unique database ID to avoid selecting the wrong worker when names repeat.
         if (d.worker_id !== undefined || d.worker_name !== undefined || d.worker_phone !== undefined) {
-          if (order.status === "Tugallandi") return json({success:false,error:"Tugallangan buyurtma yopilgan. Ustani qayta biriktirib bo'lmaydi."},409);
+          if (["Tugallandi","Bekor qilindi"].includes(order.status)) return json({success:false,error:"Tugallangan yoki bekor qilingan buyurtmaga usta biriktirib bo'lmaydi."},409);
           const workerId = num(d.worker_id,0);
           const wn = str(d.worker_name,150), wp = str(d.worker_phone,40);
           const w = workerId > 0
             ? await env.DB.prepare("SELECT id,name,phone,telegram_chat_id FROM ustalar WHERE id=? AND status='Faol' LIMIT 1").bind(workerId).first()
             : await env.DB.prepare("SELECT id,name,phone,telegram_chat_id FROM ustalar WHERE name=? AND phone=? AND status='Faol' LIMIT 1").bind(wn,wp).first();
           if (!w) return json({success:false,error:"Faol usta topilmadi"},404);
-          await env.DB.prepare("UPDATE orders SET worker_name=?,worker_phone=?,status='Ustaga biriktirildi' WHERE id=?").bind(w.name,w.phone,id).run();
+          const expectedWorkerId = d.expected_worker_id === undefined ? Number(order.worker_id || 0) : num(d.expected_worker_id,-1);
+          if (expectedWorkerId < 0 || expectedWorkerId !== Number(order.worker_id || 0)) return json({success:false,error:"Buyurtma boshqa joyda o'zgargan. Ro'yxatni yangilang."},409);
+          if (Number(order.worker_id || 0) === Number(w.id) && order.status === "Ustaga biriktirildi") return json({success:true,message:"Bu usta allaqachon biriktirilgan",worker_name:w.name,worker_phone:w.phone,status:order.status,workerNotified:Boolean(w.telegram_chat_id),unchanged:true});
+          const assigned = await env.DB.prepare("UPDATE orders SET worker_id=?,worker_name=?,worker_phone=?,status='Ustaga biriktirildi' WHERE id=? AND COALESCE(worker_id,0)=? AND status NOT IN ('Tugallandi','Bekor qilindi')").bind(w.id,w.name,w.phone,id,expectedWorkerId).run();
+          if (Number(assigned.meta?.changes || 0) !== 1) return json({success:false,error:"Buyurtma bir vaqtning o'zida o'zgartirildi. Yangilab qayta urinib ko'ring."},409);
           await notifyCustomer(order.phone,`👨‍🔧 USTA 24 — SIZGA USTA BIRIKTIRILDI\nBuyurtma #${id}\nXizmat: ${order.service}\nUsta: ${w.name}\nTelefon: ${w.phone}`);
-          if (w.telegram_chat_id) await workerTG(w.telegram_chat_id,`🔔 YANGI BUYURTMA #${id}\nMijoz: ${order.name}\nTelefon: ${order.phone}\nXizmat: ${order.service}\nManzil: ${order.address}\nIzoh: ${order.details || "Yo'q"}\n\nHolatni tugma orqali yangilang.`,{reply_markup:{inline_keyboard:[[{text:"✅ Buyurtmani qabul qilish",callback_data:`w:accept:${id}`}]]}});
-          await notifyAdmin(`👷 Buyurtma #${id} ${w.name} ustaga biriktirildi.`);
-          return json({success:true,message:"Usta biriktirildi",worker_name:w.name,worker_phone:w.phone,status:"Ustaga biriktirildi"});
+          const workerNotified = w.telegram_chat_id ? await workerTG(w.telegram_chat_id,`🔔 YANGI BUYURTMA #${id}\nMijoz: ${order.name}\nTelefon: ${order.phone}\nXizmat: ${order.service}\nManzil: ${order.address}\nIzoh: ${order.details || "Yo'q"}\n\nHolatni tugma orqali yangilang.`,{reply_markup:{inline_keyboard:[[{text:"✅ Buyurtmani qabul qilish",callback_data:`w:accept:${id}`}]]}}) : false;
+          await notifyAdmin(`👷 Buyurtma #${id} ${w.name} ustaga biriktirildi. Telegram: ${workerNotified ? "yuborildi" : "bog'lanmagan"}`);
+          return json({success:true,message:workerNotified?"Usta biriktirildi va Telegram xabari yuborildi":"Usta biriktirildi, lekin Telegram xabari yuborilmadi. Usta botni /start qilib telefonini tasdiqlashi kerak.",worker_name:w.name,worker_phone:w.phone,status:"Ustaga biriktirildi",workerNotified});
         }
         const updates = [];
         if (d.name !== undefined) updates.push(["name",str(d.name,150)]);
