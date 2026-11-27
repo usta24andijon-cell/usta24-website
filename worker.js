@@ -212,7 +212,10 @@ export default {
           if (action === "pay") {
             if (order.status !== "Tugallandi") { await answer("Avval ish tugallanishi kerak."); return json({success:true}); }
             const finance = await env.DB.prepare("SELECT * FROM order_finances WHERE order_id=?").bind(id).first();
-            if (!finance) { await answer("Komissiya yozuvi topilmadi. Admin bilan bog'laning."); return json({success:true}); }
+            if (!finance) { await answer("Komissiya to'lovi qayd etildi.");
+            if (cb.message?.chat?.id && cb.message?.message_id) {
+              try { await fetch(`https://api.telegram.org/bot${workerBotToken}/editMessageReplyMarkup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: cb.message.chat.id, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } }) }); } catch (e) { console.error("Payment button cleanup error", e); }
+            } return json({success:true}); }
             if (finance.payment_status === "To'landi") { await answer("Bu komissiya avval to'langan."); return json({success:true}); }
             const paidAt = new Date().toISOString();
             const result = await env.DB.prepare("UPDATE order_finances SET payment_status='To''landi',payment_method='Usta orqali Telegram',paid_at=? WHERE order_id=? AND payment_status='Kutilmoqda'").bind(paidAt,id).run();
