@@ -16,7 +16,7 @@ export class Usta24LiveHub {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const path = url.pathname.replace(/\\/+$/, "") || "/";
+    const path = url.pathname.replace(/\/+$/, "") || "/";
     const method = request.method;
 
     const json = (data, status = 200) => new Response(JSON.stringify(data), {
