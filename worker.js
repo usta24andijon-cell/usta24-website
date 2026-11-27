@@ -238,7 +238,7 @@ export default {
           }
           await notifyCustomer(order.phone, `📢 USTA 24 — BUYURTMANGIZ HOLATI YANGILANDI\n\n🆔 Buyurtma: #${id}\n🔧 Xizmat: ${order.service}\n📌 Holat: ${statusMap[action]}\n👨‍🔧 Usta: ${worker.name}`);
           await notifyAdmin(`👨‍🔧 USTA BUYURTMA HOLATINI O'ZGARTIRDI\n🆔 #${id}\n👨‍🔧 ${worker.name}\n📌 ${statusMap[action]}`);
-          await workerTG(String(cb.from.id), `✅ Buyurtma #${id} holati: ${statusMap[action]}`);
+          await workerTG(String(cb.from.id), action === "done" ? `🏁 BUYURTMA #${id} TUGALLANDI\n💰 Ish narxi: ${num(order.price).toLocaleString("uz-UZ")} so'm\n📊 USTA24 komissiyasi (10%): ${Math.round(num(order.price) * 0.10).toLocaleString("uz-UZ")} so'm\n\nKomissiya pulini USTA24 ga topshirgach, yuqoridagi “💵 Komissiyani to‘ladim” tugmasini bosing.` : `✅ Buyurtma #${id} holati: ${statusMap[action]}`);
           return json({ success: true, status: statusMap[action] });
         }
         return json({ success: true });
