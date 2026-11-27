@@ -529,7 +529,8 @@ export default {
         const expenses=await env.DB.prepare("SELECT COALESCE(SUM(amount),0) total FROM expenses").first();
         const rows=await env.DB.prepare(`SELECT f.*,o.name customer_name,o.phone,o.service,o.worker_name,o.status order_status,o.created_at
           FROM order_finances f JOIN orders o ON o.id=f.order_id ORDER BY f.id DESC`).all();
-        return json({success:true,summary:{revenue:num(summary?.revenue),paid:num(summary?.paid),pending:num(summary?.pending),expenses:num(expenses?.total),profit:num(summary?.revenue)-num(expenses?.total)},commissions:rows.results||[]});
+        const revenue=num(summary?.revenue), paid=num(summary?.paid), pending=num(summary?.pending), expenseTotal=num(expenses?.total);
+        return json({success:true,summary:{revenue,paid,pending,expenses:expenseTotal,profit:paid-expenseTotal,cash_profit:paid-expenseTotal,expected_profit:revenue-expenseTotal},commissions:rows.results||[]});
       }
       m=path.match(/^\/api\/admin\/finance\/commissions\/(\d+)$/);
       if(m && method==="PATCH"){
