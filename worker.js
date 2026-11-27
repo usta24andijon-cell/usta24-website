@@ -204,11 +204,24 @@ export default {
               });
             } catch (e) { console.error("Telegram callback answer error", e); }
           };
-          if (parts.length !== 3 || parts[0] !== "w" || !Number.isInteger(id) || id < 1 || !statusMap[action]) { await answer("Buyruq noto'g'ri."); return json({ success: true }); }
+          if (parts.length !== 3 || parts[0] !== "w" || !Number.isInteger(id) || id < 1 || (!statusMap[action] && action !== "pay")) { await answer("Buyruq noto'g'ri."); return json({ success: true }); }
           const worker = await env.DB.prepare("SELECT id, name, phone FROM ustalar WHERE telegram_chat_id = ? AND status = 'Faol' LIMIT 1").bind(String(cb.from.id)).first();
           if (!worker) { await answer("Siz faol usta sifatida topilmadingiz."); return json({ success: true }); }
           const order = await getOrder(id);
           if (!order || (Number(order.worker_id || 0) !== Number(worker.id) && (!order.worker_phone || phone(order.worker_phone) !== phone(worker.phone)))) { await answer("Bu buyurtma sizga biriktirilmagan."); return json({ success: true }); }
+          if (action === "pay") {
+            if (order.status !== "Tugallandi") { await answer("Avval ish tugallanishi kerak."); return json({success:true}); }
+            const finance = await env.DB.prepare("SELECT * FROM order_finances WHERE order_id=?").bind(id).first();
+            if (!finance) { await answer("Komissiya yozuvi topilmadi. Admin bilan bog'laning."); return json({success:true}); }
+            if (finance.payment_status === "To'landi") { await answer("Bu komissiya avval to'langan."); return json({success:true}); }
+            const paidAt = new Date().toISOString();
+            const result = await env.DB.prepare("UPDATE order_finances SET payment_status='To''landi',payment_method='Usta orqali Telegram',paid_at=? WHERE order_id=? AND payment_status='Kutilmoqda'").bind(paidAt,id).run();
+            if (Number(result.meta?.changes || 0) !== 1) { await answer("To'lov holati o'zgargan. Yangilang."); return json({success:true}); }
+            await answer("Komissiya to'lovi qayd etildi.");
+            await notifyAdmin(`💵 USTA KOMISSIYANI TOPSHIRDI\n🆔 Buyurtma #${id}\n👨‍🔧 Usta: ${worker.name}\n💰 Komissiya: ${num(finance.commission_amount).toLocaleString("uz-UZ")} so'm\n🕒 ${paidAt}`);
+            await workerTG(String(cb.from.id), `✅ Buyurtma #${id} uchun ${num(finance.commission_amount).toLocaleString("uz-UZ")} so'm komissiya to'lovi qayd etildi. Rahmat!`);
+            return json({success:true,status:"To'landi"});
+          }
           const allowed = { accept: ["Ustaga biriktirildi"], start: ["Qabul qilindi"], done: ["Bajarilmoqda"] };
           if (!allowed[action].includes(str(order.status))) { await answer("Buyurtma holati o'zgargan yoki bu amal mumkin emas."); return json({ success: true }); }
           if (action === "done") {
@@ -219,7 +232,7 @@ export default {
             if (Number(changed.meta?.changes || 0) !== 1) { await answer("Buyurtma holati boshqa joyda o'zgargan. Yangilang."); return json({ success: true }); }
           }
           await answer("Holat yangilandi: " + statusMap[action]);
-          const next = { accept: [[{ text: "🚧 Ishni boshlash", callback_data: `w:start:${id}` }]], start: [[{ text: "🏁 Ish tugadi", callback_data: `w:done:${id}` }]], done: [] };
+          const next = { accept: [[{ text: "🚧 Ishni boshlash", callback_data: `w:start:${id}` }]], start: [[{ text: "🏁 Ish tugadi", callback_data: `w:done:${id}` }]], done: [[{ text: "💵 Komissiyani to‘ladim", callback_data: `w:pay:${id}` }]] };
           if (cb.message?.chat?.id && cb.message?.message_id) {
             try { await fetch(`https://api.telegram.org/bot${workerBotToken}/editMessageReplyMarkup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: cb.message.chat.id, message_id: cb.message.message_id, reply_markup: { inline_keyboard: next[action] } }) }); } catch (e) { console.error(e); }
           }
