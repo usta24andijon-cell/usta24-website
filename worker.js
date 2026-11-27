@@ -232,13 +232,18 @@ export default {
             if (Number(changed.meta?.changes || 0) !== 1) { await answer("Buyurtma holati boshqa joyda o'zgargan. Yangilang."); return json({ success: true }); }
           }
           await answer("Holat yangilandi: " + statusMap[action]);
-          const next = { accept: [[{ text: "🚧 Ishni boshlash", callback_data: `w:start:${id}` }]], start: [[{ text: "🏁 Ish tugadi", callback_data: `w:done:${id}` }]], done: [[{ text: "💵 Komissiyani to‘ladim", callback_data: `w:pay:${id}` }]] };
+          const next = { accept: [[{ text: "🚧 Ishni boshlash", callback_data: `w:start:${id}` }]], start: [[{ text: "🏁 Ish tugadi", callback_data: `w:done:${id}` }]], done: [] };
           if (cb.message?.chat?.id && cb.message?.message_id) {
             try { await fetch(`https://api.telegram.org/bot${workerBotToken}/editMessageReplyMarkup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: cb.message.chat.id, message_id: cb.message.message_id, reply_markup: { inline_keyboard: next[action] } }) }); } catch (e) { console.error(e); }
           }
           await notifyCustomer(order.phone, `📢 USTA 24 — BUYURTMANGIZ HOLATI YANGILANDI\n\n🆔 Buyurtma: #${id}\n🔧 Xizmat: ${order.service}\n📌 Holat: ${statusMap[action]}\n👨‍🔧 Usta: ${worker.name}`);
           await notifyAdmin(`👨‍🔧 USTA BUYURTMA HOLATINI O'ZGARTIRDI\n🆔 #${id}\n👨‍🔧 ${worker.name}\n📌 ${statusMap[action]}`);
-          await workerTG(String(cb.from.id), action === "done" ? `🏁 BUYURTMA #${id} TUGALLANDI\n💰 Ish narxi: ${num(order.price).toLocaleString("uz-UZ")} so'm\n📊 USTA24 komissiyasi (10%): ${Math.round(num(order.price) * 0.10).toLocaleString("uz-UZ")} so'm\n\nKomissiya pulini USTA24 ga topshirgach, yuqoridagi “💵 Komissiyani to‘ladim” tugmasini bosing.` : `✅ Buyurtma #${id} holati: ${statusMap[action]}`);
+          if (action === "done") {
+            const commission = Math.round(num(order.price) * 0.10);
+            await workerTG(String(cb.from.id), `🏁 BUYURTMA #${id} TUGALLANDI\n💰 Ish narxi: ${num(order.price).toLocaleString("uz-UZ")} so‘m\n📊 USTA24 komissiyasi (10%): ${commission.toLocaleString("uz-UZ")} so‘m\n📌 To‘lov holati: KUTILMOQDA\n\nKomissiya pulini USTA24 ga topshirganingizdan keyin quyidagi tugmani bosing.`, { reply_markup: { inline_keyboard: [[{ text: `💵 ${commission.toLocaleString("uz-UZ")} so‘m — KOMISSIYANI TO‘LADIM`, callback_data: `w:pay:${id}` }]] } });
+          } else {
+            await workerTG(String(cb.from.id), `✅ Buyurtma #${id} holati: ${statusMap[action]}`);
+          }
           return json({ success: true, status: statusMap[action] });
         }
         return json({ success: true });
@@ -540,8 +545,8 @@ export default {
           COALESCE(SUM(CASE WHEN payment_status='To''landi' THEN commission_amount ELSE 0 END),0) paid,
           COALESCE(SUM(CASE WHEN payment_status='Kutilmoqda' THEN commission_amount ELSE 0 END),0) pending FROM order_finances`).first();
         const expenses=await env.DB.prepare("SELECT COALESCE(SUM(amount),0) total FROM expenses").first();
-        const rows=await env.DB.prepare(`SELECT f.*,o.name customer_name,o.phone,o.service,o.worker_name,o.status order_status,o.created_at
-          FROM order_finances f JOIN orders o ON o.id=f.order_id ORDER BY f.id DESC`).all();
+        const rows=await env.DB.prepare(`SELECT f.*,o.name customer_name,o.phone,o.service,o.worker_name,o.worker_phone,o.status order_status,o.created_at,u.telegram_chat_id worker_telegram_chat_id
+          FROM order_finances f JOIN orders o ON o.id=f.order_id LEFT JOIN ustalar u ON u.id=o.worker_id ORDER BY f.id DESC`).all();
         const revenue=num(summary?.revenue), paid=num(summary?.paid), pending=num(summary?.pending), expenseTotal=num(expenses?.total);
         return json({success:true,summary:{revenue,paid,pending,expenses:expenseTotal,profit:paid-expenseTotal,cash_profit:paid-expenseTotal,expected_profit:revenue-expenseTotal},commissions:rows.results||[]});
       }
