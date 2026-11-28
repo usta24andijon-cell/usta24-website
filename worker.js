@@ -130,36 +130,74 @@ export default {
     try {
       if (!env.DB && path.startsWith("/api/")) return json({ success: false, error: "D1 DB sozlanmagan" }, 500);
 
-      // CUSTOMER TELEGRAM WEBHOOK
+      // CUSTOMER TELEGRAM WEBHOOK — guided order flow + customer history
       if (path === "/api/customer-telegram-webhook" && method === "POST") {
         const received = str(request.headers.get("X-Telegram-Bot-Api-Secret-Token"));
         const expected = str(env.CUSTOMER_BOT_WEBHOOK_SECRET);
-        if (!expected || received !== expected) return json({ success: false, error: "Webhook ruxsati yo'q" }, 403);
-        const update = await body();
-        const msg = update?.message;
-        if (!msg?.chat?.id) return json({ success: true });
-        const chatId = String(msg.chat.id);
-        if (String(msg.text || "").startsWith("/start")) {
-          await customerTG(chatId, "Assalomu alaykum! USTA 24 mijozlar botiga xush kelibsiz.\n\nBuyurtma holati haqida xabar olish uchun telefon raqamingizni tasdiqlang.", {
-            reply_markup: { keyboard: [[{ text: "📱 Telefon raqamimni yuborish", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
-          });
-          return json({ success: true });
-        }
-        if (msg.contact) {
-          const c = msg.contact;
-          if (!msg.from || !c.user_id || Number(c.user_id) !== Number(msg.from.id)) {
-            await customerTG(chatId, "Iltimos, faqat o'zingizning telefon raqamingizni yuboring.");
-            return json({ success: true });
+        if (!expected || received !== expected) return json({ success:false,error:"Webhook ruxsati yo'q" },403);
+        const update = await body(), msg=update?.message, cb=update?.callback_query;
+        const chatId=String(msg?.chat?.id||cb?.message?.chat?.id||"");
+        if(!chatId||(msg?.chat?.type&&msg.chat.type!=="private")) return json({success:true});
+        const send=(text,extra={})=>customerTG(chatId,text,extra);
+        const menu={keyboard:[[{text:"🛠 Buyurtma berish"}],[{text:"📦 Buyurtmalarim"},{text:"📞 Operator"}],[{text:"🌐 USTA24 sayti"}]],resize_keyboard:true,is_persistent:true};
+        const saveSession=async(step,data)=>env.DB.prepare("INSERT INTO customer_bot_sessions(chat_id,step,data,updated_at) VALUES(?,?,?,datetime('now')) ON CONFLICT(chat_id) DO UPDATE SET step=excluded.step,data=excluded.data,updated_at=datetime('now')").bind(chatId,step,JSON.stringify(data||{})).run();
+        const getSession=async()=>{const r=await env.DB.prepare("SELECT step,data FROM customer_bot_sessions WHERE chat_id=?").bind(chatId).first();if(!r)return null;try{return{step:r.step,data:JSON.parse(r.data||"{}")}}catch{return{step:r.step,data:{}}}};
+        const clearSession=async()=>env.DB.prepare("DELETE FROM customer_bot_sessions WHERE chat_id=?").bind(chatId).run();
+        const answer=async(text)=>{if(!cb?.id||!env.CUSTOMER_BOT_TOKEN)return;try{await fetch("https://api.telegram.org/bot"+env.CUSTOMER_BOT_TOKEN+"/answerCallbackQuery",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({callback_query_id:cb.id,text,show_alert:false})})}catch(e){console.error("Customer callback answer error",e)}};
+        const showServices=async()=>{const r=await env.DB.prepare("SELECT id,name FROM services WHERE status='Faol' ORDER BY name COLLATE NOCASE").all(),list=r.results||[];if(!list.length){await send("Hozircha xizmatlar ro'yxati mavjud emas. Operator bilan bog'laning.");return}const keyboard=[];for(let i=0;i<list.length;i+=2){const row=[{text:list[i].name,callback_data:"c:service:"+list[i].id}];if(list[i+1])row.push({text:list[i+1].name,callback_data:"c:service:"+list[i+1].id});keyboard.push(row)}await send("🔧 Qaysi xizmat kerak? Quyidan tanlang:",{reply_markup:{inline_keyboard:keyboard}})};
+        if(cb?.id&&cb.data){
+          const parts=String(cb.data).split(":");
+          if(parts[0]==="c"&&parts[1]==="cancel"){await clearSession();await answer("Bekor qilindi");await send("Buyurtma bekor qilindi.",{reply_markup:menu});return json({success:true})}
+          if(parts[0]==="c"&&parts[1]==="service"&&/^\d+$/.test(parts[2]||"")){
+            const session=await getSession();if(!session||session.step!=="service"){await answer("Sessiya tugagan. Qaytadan boshlang.");return json({success:true})}
+            const svc=await env.DB.prepare("SELECT id,name FROM services WHERE id=? AND status='Faol'").bind(Number(parts[2])).first();
+            if(!svc){await answer("Xizmat topilmadi");await showServices();return json({success:true})}
+            session.data.service=svc.name;await saveSession("address",session.data);await answer("Xizmat tanlandi");await send("📍 Buyurtma manzilini yozing (ko'cha va mo'ljal bilan):");return json({success:true})
           }
-          const p = phone(c.phone_number);
-          if (p.length < 10) { await customerTG(chatId, "Telefon raqami noto'g'ri."); return json({ success: true }); }
-          await env.DB.prepare(`INSERT INTO customer_telegram (phone, chat_id, customer_name) VALUES (?, ?, ?)
-            ON CONFLICT(phone) DO UPDATE SET chat_id = excluded.chat_id, customer_name = excluded.customer_name`)
-            .bind(p, chatId, str(msg.from.first_name, 100)).run();
-          await ensureCustomer(str(msg.from.first_name, 100), p);
-          await customerTG(chatId, "✅ Telefon raqamingiz tasdiqlandi! Endi USTA 24 buyurtmalaringiz haqida xabar olasiz.", { reply_markup: { remove_keyboard: true } });
+          if(parts[0]==="c"&&parts[1]==="confirm"){
+            const session=await getSession();if(!session||session.step!=="confirm"){await answer("Buyurtma topilmadi");return json({success:true})}
+            const d=session.data||{};if(!d.name||!d.phone||!d.service||!d.address){await answer("Ma'lumotlar to'liq emas");return json({success:true})}
+            const saved=await env.DB.prepare("INSERT INTO orders(name,phone,service,address,details,status,created_at,source) VALUES(?,?,?,?,?,'Yangi',datetime('now'),'Telegram')").bind(d.name,d.phone,d.service,d.address,d.details||"").run();
+            const id=saved.meta?.last_row_id;await ensureCustomer(d.name,d.phone,d.address);
+            await env.DB.prepare("INSERT INTO customer_telegram(phone,chat_id,customer_name) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET chat_id=excluded.chat_id,customer_name=excluded.customer_name").bind(phone(d.phone),chatId,d.name).run();
+            await clearSession();await answer("Buyurtma qabul qilindi");
+            await send("✅ USTA24 buyurtmangiz qabul qilindi!\n\n🆔 #"+id+"\n👤 "+d.name+"\n📞 "+d.phone+"\n🔧 "+d.service+"\n📍 "+d.address+"\n📌 Holat: Yangi\n\nOperatorimiz tez orada siz bilan bog'lanadi.",{reply_markup:menu});
+            await notifyAdmin("🆕 USTA24 — TELEGRAMDAN YANGI BUYURTMA\n\n🆔 #"+id+"\n👤 "+d.name+"\n📞 "+d.phone+"\n🔧 "+d.service+"\n📍 "+d.address+"\n📝 "+(d.details||"Yo'q")+"\n📌 Yangi");
+            return json({success:true,orderId:id})
+          }
+          await answer("Tugma eskirgan. Menyudan qayta boshlang.");return json({success:true})
         }
-        return json({ success: true });
+        if(msg?.text){
+          const textValue=str(msg.text,2000);
+          if(textValue.startsWith("/start")){await clearSession();await send("Assalomu alaykum! 👋\n\nUSTA24 — Andijon shahrida uy va ofis uchun ustachilik xizmatlari.\n\nQuyidagi menyudan kerakli bo'limni tanlang.",{reply_markup:menu});return json({success:true})}
+          if(textValue==="🛠 Buyurtma berish"||textValue==="/order"){await saveSession("name",{});await send("🛠 Yangi buyurtma\n\nIsmingizni yozing:",{reply_markup:{keyboard:[[{text:"❌ Bekor qilish"}]],resize_keyboard:true}});return json({success:true})}
+          if(textValue==="❌ Bekor qilish"){await clearSession();await send("Buyurtma bekor qilindi.",{reply_markup:menu});return json({success:true})}
+          if(textValue==="📦 Buyurtmalarim"){
+            const link=await env.DB.prepare("SELECT phone FROM customer_telegram WHERE chat_id=? LIMIT 1").bind(chatId).first();
+            if(!link?.phone){await send("Buyurtmalar tarixini ko'rish uchun avval bot orqali buyurtma bering va telefon raqamingizni tasdiqlang.",{reply_markup:menu});return json({success:true})}
+            const r=await env.DB.prepare("SELECT id,service,status,created_at FROM orders WHERE phone=? ORDER BY id DESC LIMIT 5").bind(link.phone).all(),rows=r.results||[];
+            const out=rows.length? "📦 Oxirgi buyurtmalaringiz:\n\n"+rows.map(o=>"#"+o.id+" · "+o.service+"\nHolat: "+o.status+"\nSana: "+o.created_at).join("\n\n"):"Hozircha buyurtmalaringiz yo'q.";
+            await send(out,{reply_markup:menu});return json({success:true})
+          }
+          if(textValue==="📞 Operator"){await send("☎️ USTA24 operatori\n\nTelefon: +998 77 069 00 03\nTelegram: @usta24_andijon\n\nXabaringizni shu botga yozib qoldiring.",{reply_markup:menu});return json({success:true})}
+          if(textValue==="🌐 USTA24 sayti"){await send("🌐 Rasmiy sayt:\nhttps://usta24-website.usta24andijon.workers.dev/",{reply_markup:menu});return json({success:true})}
+          const session=await getSession();if(!session){await send("Menyudan «🛠 Buyurtma berish» tugmasini tanlang.",{reply_markup:menu});return json({success:true})}
+          const d=session.data||{};
+          if(session.step==="name"){if(textValue.length<2){await send("Ismingizni to'liqroq yozing:");return json({success:true})}d.name=textValue.slice(0,150);await saveSession("phone",d);await send("📱 Telefon raqamingizni yozing yoki kontaktni yuboring:",{reply_markup:{keyboard:[[{text:"📱 Telefon raqamimni yuborish",request_contact:true}],[{text:"❌ Bekor qilish"}]],resize_keyboard:true}});return json({success:true})}
+          if(session.step==="phone"){const p=phone(textValue);if(!/^998\d{9}$/.test(p)){await send("Telefon noto'g'ri. Masalan: +998901234567. Yoki kontaktni yuboring.");return json({success:true})}d.phone="+"+p;await env.DB.prepare("INSERT INTO customer_telegram(phone,chat_id,customer_name) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET chat_id=excluded.chat_id,customer_name=excluded.customer_name").bind(p,chatId,d.name).run();await saveSession("service",d);await showServices();return json({success:true})}
+          if(session.step==="address"){if(textValue.length<5){await send("Manzilni aniqroq yozing, ko'cha va mo'ljalni kiriting:");return json({success:true})}d.address=textValue.slice(0,300);await saveSession("details",d);await send("📝 Muammo tafsilotini yozing. Izoh bo'lmasa, «Yo'q» deb yozing:");return json({success:true})}
+          if(session.step==="details"){d.details=textValue.slice(0,1500);await saveSession("confirm",d);await send("📋 Buyurtmani tekshiring:\n\n👤 "+d.name+"\n📞 "+d.phone+"\n🔧 "+d.service+"\n📍 "+d.address+"\n📝 "+d.details+"\n\nMa'lumotlar to'g'rimi?",{reply_markup:{inline_keyboard:[[{text:"✅ Buyurtmani tasdiqlash",callback_data:"c:confirm"}],[{text:"❌ Bekor qilish",callback_data:"c:cancel"}]]}});return json({success:true})}
+          if(session.step==="service"){await send("Xizmat turini tugmalardan tanlang.");await showServices();return json({success:true})}
+        }
+        if(msg?.contact){
+          const c=msg.contact;if(!msg.from||!c.user_id||Number(c.user_id)!==Number(msg.from.id)){await send("Iltimos, faqat o'zingizning telefon raqamingizni yuboring.");return json({success:true})}
+          const p=phone(c.phone_number);if(!/^998\d{9}$/.test(p)){await send("Telefon raqami noto'g'ri. Qayta yuboring.");return json({success:true})}
+          const session=await getSession();
+          if(session?.step==="phone"){const d=session.data||{};d.phone="+"+p;await env.DB.prepare("INSERT INTO customer_telegram(phone,chat_id,customer_name) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET chat_id=excluded.chat_id,customer_name=excluded.customer_name").bind(p,chatId,d.name).run();await ensureCustomer(d.name,d.phone);await saveSession("service",d);await send("✅ Telefon raqamingiz qabul qilindi.");await showServices()}
+          else{await env.DB.prepare("INSERT INTO customer_telegram(phone,chat_id,customer_name) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET chat_id=excluded.chat_id,customer_name=excluded.customer_name").bind(p,chatId,str(msg.from.first_name,100)).run();await ensureCustomer(str(msg.from.first_name,100),"+"+p);await send("✅ Telefon raqamingiz tasdiqlandi.",{reply_markup:menu})}
+          return json({success:true})
+        }
+        return json({success:true});
       }
 
       // WORKER TELEGRAM WEBHOOK
