@@ -175,7 +175,7 @@ export default {
           if(textValue==="📦 Buyurtmalarim"){
             const link=await env.DB.prepare("SELECT phone FROM customer_telegram WHERE chat_id=? LIMIT 1").bind(chatId).first();
             if(!link?.phone){await send("Buyurtmalar tarixini ko'rish uchun avval bot orqali buyurtma bering va telefon raqamingizni tasdiqlang.",{reply_markup:menu});return json({success:true})}
-            const r=await env.DB.prepare("SELECT id,service,status,created_at FROM orders WHERE phone=? ORDER BY id DESC LIMIT 5").bind(link.phone).all(),rows=r.results||[];
+            const r=await env.DB.prepare("SELECT id,service,status,created_at FROM orders WHERE replace(replace(phone,'+',''),' ','')=? OR phone=? ORDER BY id DESC LIMIT 5").bind(link.phone,link.phone).all(),rows=r.results||[];
             const out=rows.length? "📦 Oxirgi buyurtmalaringiz:\n\n"+rows.map(o=>"#"+o.id+" · "+o.service+"\nHolat: "+o.status+"\nSana: "+o.created_at).join("\n\n"):"Hozircha buyurtmalaringiz yo'q.";
             await send(out,{reply_markup:menu});return json({success:true})
           }
